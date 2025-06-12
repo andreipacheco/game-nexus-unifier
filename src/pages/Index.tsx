@@ -1,12 +1,36 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+
+import { useState } from "react";
+import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
+import { PlatformStats } from "@/components/dashboard/PlatformStats";
+import { GameLibrary } from "@/components/dashboard/GameLibrary";
+import { PlatformConnections } from "@/components/dashboard/PlatformConnections";
+import { mockGameData } from "@/data/mockGameData";
 
 const Index = () => {
+  const [activeView, setActiveView] = useState<'library' | 'connections'>('library');
+  const [selectedPlatform, setSelectedPlatform] = useState<string>('all');
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background">
-      <div className="text-center">
-        <h1 className="text-4xl font-bold mb-4">Welcome to Your Blank App</h1>
-        <p className="text-xl text-muted-foreground">Start building your amazing project here!</p>
-      </div>
+    <div className="min-h-screen bg-background">
+      <DashboardHeader 
+        activeView={activeView} 
+        onViewChange={setActiveView}
+      />
+      
+      <main className="container mx-auto px-4 py-6 space-y-6">
+        {activeView === 'library' ? (
+          <>
+            <PlatformStats games={mockGameData} />
+            <GameLibrary 
+              games={mockGameData}
+              selectedPlatform={selectedPlatform}
+              onPlatformChange={setSelectedPlatform}
+            />
+          </>
+        ) : (
+          <PlatformConnections />
+        )}
+      </main>
     </div>
   );
 };
