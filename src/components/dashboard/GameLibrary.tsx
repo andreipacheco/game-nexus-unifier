@@ -87,9 +87,30 @@ export const GameLibrary = ({ games, selectedPlatform, onPlatformChange }: GameL
     steam: { name: 'Steam', color: '#1b2838', icon: () => <Download /> } // Example, adjust as needed
   };
 
+  const SsearchTermLowerCase = searchTerm.toLowerCase(); // Pre-calculate for efficiency
+
   const filteredGames = allGames.filter(game => {
-    const matchesPlatform = selectedPlatform === 'all' || game.platform === selectedPlatform;
-    const matchesSearch = game.title.toLowerCase().includes(searchTerm.toLowerCase());
+    // Defensive check for game.platform matching selectedPlatform
+    const matchesPlatform = selectedPlatform === 'all' ||
+                            (game.platform &&
+                             typeof game.platform === 'string' &&
+                             game.platform.toLowerCase() === selectedPlatform.toLowerCase());
+
+    // Defensive check for game.title and game.platform in search term
+    let matchesSearch = false;
+    if (game.title && typeof game.title === 'string') {
+      matchesSearch = matchesSearch || game.title.toLowerCase().includes(SsearchTermLowerCase);
+    }
+    // Add platform to search criteria
+    if (game.platform && typeof game.platform === 'string') {
+      matchesSearch = matchesSearch || game.platform.toLowerCase().includes(SsearchTermLowerCase);
+    }
+    // Add genre to search criteria (as an example of expanding search)
+    if (game.genre && typeof game.genre === 'string') {
+        matchesSearch = matchesSearch || game.genre.toLowerCase().includes(SsearchTermLowerCase);
+    }
+
+
     return matchesPlatform && matchesSearch;
   });
 
