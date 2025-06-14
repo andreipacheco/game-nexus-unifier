@@ -52,7 +52,7 @@ export const SteamProvider: React.FC<SteamProviderProps> = ({ children }) => {
     setIsLoadingSteamProfile(true);
     setSteamProfileError(null);
     try {
-      const response = await fetch('/api/me'); // No steamId needed, uses session cookie
+      const response = await fetch('/api/user/me'); // Corrected endpoint
       if (response.ok) {
         const data: SteamUserProfile & { steamId: string } = await response.json();
         setSteamId(data.steamId);

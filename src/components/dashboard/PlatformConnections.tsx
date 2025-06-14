@@ -109,7 +109,7 @@ export const PlatformConnections = () => {
       // SteamContext's initial load (useEffect calling checkUserSession) should fetch the user.
       // We can optionally trigger another checkUserSession here if we want to be absolutely sure
       // or if we want to handle a "login success" toast/message.
-      logger.info('Steam login successful redirect detected. Context should be updating/updated.');
+      console.log('Steam login successful redirect detected. Context should be updating/updated.');
       // For now, we rely on the initial load of SteamContext.
       // If a toast message is desired: e.g. toast("Steam connected successfully!")
 
@@ -143,16 +143,16 @@ export const PlatformConnections = () => {
       const response = await fetch('/auth/logout'); // Backend logout
       if (response.ok) {
         clearSteamConnection(); // Clear context and localStorage
-        logger.info('Successfully logged out from backend and cleared Steam connection.');
+        console.log('Successfully logged out from backend and cleared Steam connection.');
         // Optionally redirect to home or login page via navigate('/')
       } else {
-        logger.error('Backend logout failed.', { status: response.status });
+        console.error('Backend logout failed. Status:', response.status);
         setLocalSteamError('Logout failed on the server. Please try again.');
         // Still clear local connection as a fallback
         clearSteamConnection();
       }
     } catch (error) {
-      logger.error('Error during logout request.', { error });
+      console.error('Error during logout request:', error);
       setLocalSteamError('An error occurred during logout. Please try again.');
       // Still clear local connection
       clearSteamConnection();
