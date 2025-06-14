@@ -67,7 +67,7 @@ export const GameCard = ({ game }: GameCardProps) => {
           <div>
             <h3 className="font-semibold line-clamp-1">{game.title}</h3>
             <p className="text-sm text-muted-foreground">
-              {game.genre.join(', ')} • {game.releaseYear}
+              {Array.isArray(game.genre) ? game.genre.join(', ') : (typeof game.genre === 'string' ? game.genre : 'N/A')} • {game.releaseYear}
             </p>
           </div>
           

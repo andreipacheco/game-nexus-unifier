@@ -27,18 +27,42 @@ interface GameLibraryProps {
 import { useSteam } from "@/contexts/SteamContext"; // Import useSteam
 
 // Helper to convert SteamGame to Game for consistent display, or GameCard could be adapted
-const steamGameToGameType = (steamGame: SteamGame): Game => ({
-  id: `steam-${steamGame.appID}`,
-  title: steamGame.name,
-  platform: 'steam', // Special platform key for Steam games
-  genre: 'Unknown', // Steam API doesn't typically provide genre directly in owned games list
-  releaseDate: 'Unknown',
-  imageUrl: `https://cdn.akamai.steamstatic.com/steam/apps/${steamGame.appID}/header.jpg`, // Construct image URL
-  playtime: steamGame.playtimeForever / 60, // Convert minutes to hours
-  achievements: { current: 0, total: 0 }, // Placeholder, as fetching achievements is a separate call
-  rating: 0, // Placeholder
-  status: 'owned',
-});
+const steamGameToGameType = (steamGame: SteamGame): Game | null => {
+  if (!steamGame || typeof steamGame.appID === 'undefined' || steamGame.appID === null) {
+    console.warn('Skipping Steam game with missing or invalid appID:', steamGame);
+    return null;
+  }
+
+  const gameTitle = steamGame.name || 'Unknown Steam Game';
+  const playtimeHours = typeof steamGame.playtimeForever === 'number' ? Math.round(steamGame.playtimeForever / 60) : 0;
+
+  // Construct image URL safely, using a placeholder if data is missing
+  // The current GameCard uses coverImage. header.jpg is usually available.
+  // imgIconURL is for smaller list icons, not usually for card headers.
+  const coverImg = `https://cdn.akamai.steamstatic.com/steam/apps/${steamGame.appID}/header.jpg`;
+  // If imgIconURL was needed for something else:
+  // const iconUrl = steamGame.imgIconURL || '';
+  // const smallImageUrl = iconUrl ? `https://media.steampowered.com/steamcommunity/public/images/apps/${steamGame.appID}/${iconUrl}.jpg` : 'placeholder_icon.svg';
+
+
+  return {
+    id: `steam-${steamGame.appID.toString()}`,
+    title: gameTitle,
+    platform: 'steam',
+    status: 'owned',
+    coverImage: coverImg,
+    imageUrl: coverImg, // If Game type uses both, or for consistency
+    playtime: playtimeHours,
+    achievements: { unlocked: 0, total: 0 },
+    lastPlayed: new Date(0).toISOString(),
+    releaseDate: 'N/A',
+    releaseYear: 'N/A',
+    genre: 'N/A',
+    rating: 0,
+    // Ensure all other fields from the Game interface in mockGameData.ts have defaults
+    // e.g. tags: [], developer: 'N/A', etc.
+  };
+};
 
 
 export const GameLibrary = ({ games, selectedPlatform, onPlatformChange }: GameLibraryProps) => {
@@ -79,7 +103,7 @@ export const GameLibrary = ({ games, selectedPlatform, onPlatformChange }: GameL
 
   const allGames = [
     ...games,
-    ...steamGames.map(steamGameToGameType)
+    ...(steamGames.map(steamGameToGameType).filter(game => game !== null) as Game[])
   ];
 
   const currentPlatformInfo: PlatformInfo = { // Add steam to platformInfo if not already there for filtering
