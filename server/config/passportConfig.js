@@ -19,7 +19,7 @@ function configurePassport(passportInstance) {
 
     passportInstance.use(new SteamStrategy({
         returnURL: 'http://localhost:3000/auth/steam/return', // Hardcoded for local backend on port 3000
-        realm: process.env.APP_BASE_URL, // Realm is the frontend URL
+        realm: 'http://localhost:3000', // Changed to match backend origin for local dev
         apiKey: process.env.STEAM_API_KEY
     },
     async function(identifier, profile, done) {

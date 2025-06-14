@@ -40,10 +40,10 @@ console.log('[DEBUG] server.js: express.json middleware applied.');
 app.use(session({
   secret: process.env.SESSION_SECRET || 'fallback_secret_key_12345', // Use env var
   resave: false,
-  saveUninitialized: false, // True = create session when nothing modified, False = do not create session until something stored
+  saveUninitialized: false, // Reverted to false
   // cookie: { secure: process.env.NODE_ENV === 'production' } // Recommended for HTTPS
 }));
-console.log('[DEBUG] server.js: express-session middleware applied.');
+console.log('[DEBUG] server.js: express-session middleware applied with saveUninitialized: false.');
 
 // Passport middleware
 app.use(passport.initialize());
