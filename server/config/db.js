@@ -31,12 +31,12 @@ const connectDB = async () => {
   } catch (err) {
     logger.error('MongoDB connection error:', { message: err.message, error: err }); // Use logger, include error object
     if (process.env.NODE_ENV === 'test') {
-      // In test environment, re-throw the error or a specific error
-      // This helps in testing the connection failure itself if needed
+      // In test environment, re-throw the error
       throw new Error(`MongoDB connection failed: ${err.message}`);
     }
-    // Exit process with failure if not in test environment
-    process.exit(1);
+    // For non-test environments, log and re-throw to let the main app decide how to handle.
+    // This avoids process.exit() deep in a module.
+    throw err;
   }
 };
 

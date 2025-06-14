@@ -12,11 +12,14 @@ interface SteamUserProfile {
 interface SteamContextType {
   steamId: string | null;
   steamUser: SteamUserProfile | null;
+  isAuthenticated: boolean; // Added isAuthenticated
   isLoadingSteamProfile: boolean;
   steamProfileError: string | null;
-  setSteamConnection: (steamId: string | null, userProfile?: SteamUserProfile | null) => void;
-  fetchSteamProfile: (steamId: string) => Promise<void>;
+  // setSteamConnection: (steamId: string | null, userProfile?: SteamUserProfile | null) => void; // Potentially re-evaluate need
+  fetchSteamProfile: (steamId: string) => Promise<void>; // Kept for now, might be used by OpenID callback before full /api/me refresh
   clearSteamConnection: () => void;
+  // New function to explicitly trigger a refresh from /api/me
+  checkUserSession: () => Promise<void>;
 }
 
 // Create the context with a default undefined value initially, will be provided by provider
@@ -30,35 +33,56 @@ interface SteamProviderProps {
 export const SteamProvider: React.FC<SteamProviderProps> = ({ children }) => {
   const [steamId, setSteamId] = useState<string | null>(null);
   const [steamUser, setSteamUser] = useState<SteamUserProfile | null>(null);
-  const [isLoadingSteamProfile, setIsLoadingSteamProfile] = useState<boolean>(false);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false); // Added
+  const [isLoadingSteamProfile, setIsLoadingSteamProfile] = useState<boolean>(true); // Start true on initial load
   const [steamProfileError, setSteamProfileError] = useState<string | null>(null);
 
-  // Function to set steam connection details manually (e.g., after OpenID callback)
-  const setSteamConnection = (newSteamId: string | null, userProfile: SteamUserProfile | null = null) => {
-    setSteamId(newSteamId);
-    setSteamUser(userProfile);
-    if (!newSteamId) {
-        localStorage.removeItem('steamId');
-        localStorage.removeItem('steamUser');
-    } else {
-        localStorage.setItem('steamId', newSteamId);
-        if (userProfile) {
-            localStorage.setItem('steamUser', JSON.stringify(userProfile));
-        }
-    }
-  };
-
-  // Function to clear steam connection details (logout)
-  const clearSteamConnection = () => {
+  // Function to clear steam connection details (logout or session expiry)
+  const clearSteamConnection = useCallback(() => { // Wrapped in useCallback
     setSteamId(null);
     setSteamUser(null);
+    setIsAuthenticated(false);
     localStorage.removeItem('steamId');
     localStorage.removeItem('steamUser');
-    // Potentially call a backend logout endpoint if necessary
-    console.log("Steam connection cleared.");
-  };
+    // console.log("Steam connection cleared from context.");
+  }, []); // No dependencies, this function is stable
 
-  // Function to fetch steam profile data if only steamId is known
+  // Function to fetch current user session from backend /api/me
+  const checkUserSession = useCallback(async () => {
+    setIsLoadingSteamProfile(true);
+    setSteamProfileError(null);
+    try {
+      const response = await fetch('/api/me'); // No steamId needed, uses session cookie
+      if (response.ok) {
+        const data: SteamUserProfile & { steamId: string } = await response.json();
+        setSteamId(data.steamId);
+        setSteamUser({
+          personaName: data.personaName,
+          avatarFull: data.avatarFull, // Ensure backend sends avatarFull
+          profileUrl: data.profileUrl,
+        });
+        setIsAuthenticated(true);
+        localStorage.setItem('steamId', data.steamId); // Persist for quick UI hints
+        localStorage.setItem('steamUser', JSON.stringify(data));
+      } else if (response.status === 401) { // Not authenticated
+        clearSteamConnection();
+      } else { // Other errors
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `Server error: ${response.status}`);
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to check user session';
+      setSteamProfileError(errorMessage);
+      console.error("Error checking user session:", errorMessage);
+      clearSteamConnection(); // Clear session on error
+    } finally {
+      setIsLoadingSteamProfile(false);
+    }
+  }, [clearSteamConnection]); // Added clearSteamConnection as dependency
+
+  // Function to fetch steam profile data if only steamId is known (e.g. after OpenID redirect if needed)
+  // This might be less used if /api/me is the primary source after login.
+  // However, PlatformConnections might call this to optimistically load UI with fresh Steam data.
   const fetchSteamProfile = async (sId: string) => {
     if (!sId) return;
     setIsLoadingSteamProfile(true);
@@ -83,67 +107,23 @@ export const SteamProvider: React.FC<SteamProviderProps> = ({ children }) => {
     }
   };
 
-  // Load initial state from localStorage and verify with backend
+  // Initial load: check user session
   useEffect(() => {
-    const storedSteamId = localStorage.getItem('steamId');
-    if (storedSteamId) {
-      setIsLoadingSteamProfile(true);
-      setSteamProfileError(null);
-      // Verify storedSteamId with backend and fetch profile
-      fetch(`/api/user/steam_profile?steamid=${storedSteamId}`)
-        .then(async (response) => {
-          if (!response.ok) {
-            // If user not found in DB (404) or other error, clear local state
-            if (response.status === 404) {
-              console.log('Stored SteamID not found in DB, clearing local session.');
-            } else {
-              const errorData = await response.json().catch(() => ({})); // Try to parse error, default if not JSON
-              console.error(`Error verifying SteamID with backend: ${response.status}`, errorData.error || response.statusText);
-            }
-            clearSteamConnection(); // Clears context and localStorage
-            return;
-          }
-          return response.json();
-        })
-        .then((data) => {
-          if (data) {
-            // Data here should be { steamId, personaName, avatarFull, profileUrl }
-            setSteamId(data.steamId); // Set from verified data
-            setSteamUser({
-              personaName: data.personaName,
-              avatarFull: data.avatarFull,
-              profileUrl: data.profileUrl,
-            });
-            // Update localStorage with potentially fresher data from DB (though it should match if DB is source of truth)
-            localStorage.setItem('steamId', data.steamId);
-            localStorage.setItem('steamUser', JSON.stringify({
-              personaName: data.personaName,
-              avatarFull: data.avatarFull,
-              profileUrl: data.profileUrl,
-            }));
-          }
-        })
-        .catch(err => {
-          console.error('Network error or other issue verifying SteamID with backend:', err);
-          // Clear local state on any critical fetch error too
-          clearSteamConnection();
-        })
-        .finally(() => {
-          setIsLoadingSteamProfile(false);
-        });
-    }
-  }, []); // Note: `clearSteamConnection` is stable and not needed in deps here.
+    checkUserSession();
+  }, [checkUserSession]); // checkUserSession is memoized with useCallback
 
 
   return (
     <SteamContext.Provider value={{
         steamId,
         steamUser,
+        isAuthenticated, // Added
         isLoadingSteamProfile,
         steamProfileError,
-        setSteamConnection,
-        fetchSteamProfile, // This function is still used by PlatformConnections for post-OpenID fetch
-        clearSteamConnection
+        // setSteamConnection, // Removed as checkUserSession and fetchSteamProfile handle updates
+        fetchSteamProfile,
+        clearSteamConnection,
+        checkUserSession // Exposed for manual refresh if needed
     }}>
       {children}
     </SteamContext.Provider>

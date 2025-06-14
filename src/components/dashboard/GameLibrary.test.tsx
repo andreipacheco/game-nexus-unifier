@@ -45,15 +45,16 @@ const mockUseSteam = useSteam as jest.Mock;
 describe('GameLibrary Component', () => {
   beforeEach(() => {
     fetchMock.resetMocks();
-    mockUseSteam.mockReturnValue({ // Default mock for tests not focusing on Steam
+    mockUseSteam.mockReturnValue({
       steamId: null,
       steamUser: null,
+      isAuthenticated: false, // Default to not authenticated
       isLoadingSteamProfile: false,
       steamProfileError: null,
     });
   });
 
-  it('should render local games initially when no steamId in context', () => {
+  it('should render local games initially when not authenticated', () => {
     render(<GameLibrary games={mockGames} selectedPlatform="all" onPlatformChange={() => {}} />);
     expect(screen.getByText('Local Game 1')).toBeInTheDocument();
     expect(screen.getByText('Local Game 2')).toBeInTheDocument();
@@ -70,7 +71,8 @@ describe('GameLibrary Component', () => {
     const mockSteamProfile: SteamUserProfile = { personaName: 'TestSteam', avatarFull: 'avatar.jpg', profileUrl: 'url' };
     mockUseSteam.mockReturnValue({
       steamId: steamId,
-      steamUser: mockSteamProfile, // steamUser is needed for the filter to appear
+      steamUser: mockSteamProfile,
+      isAuthenticated: true, // User is authenticated
       isLoadingSteamProfile: false,
       steamProfileError: null,
     });
@@ -105,6 +107,7 @@ describe('GameLibrary Component', () => {
     mockUseSteam.mockReturnValue({
       steamId: steamId,
       steamUser: mockSteamProfile,
+      isAuthenticated: true,
       isLoadingSteamProfile: false,
       steamProfileError: null,
     });
@@ -135,6 +138,7 @@ describe('GameLibrary Component', () => {
     mockUseSteam.mockReturnValue({
       steamId: steamId,
       steamUser: mockSteamProfile,
+      isAuthenticated: true,
       isLoadingSteamProfile: false,
       steamProfileError: null,
     });
@@ -155,9 +159,10 @@ describe('GameLibrary Component', () => {
   });
 
   it('should not fetch Steam games if steamId is null in context', () => {
-    mockUseSteam.mockReturnValue({ // steamId is null by default in this mock setup
+    mockUseSteam.mockReturnValue({
         steamId: null,
         steamUser: null,
+        isAuthenticated: false,
         isLoadingSteamProfile: false,
         steamProfileError: null,
     });
