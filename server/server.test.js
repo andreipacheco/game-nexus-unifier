@@ -19,6 +19,8 @@ jest.mock('steamapi', () => {
 
 // Now that the mock is set up, require the app.
 // This ensures that when server.js does `new SteamAPI()`, it uses the mock above.
+process.env.MONGODB_URI = 'mongodb://localhost:27017/test_db_server'; // Set dummy URI for tests
+jest.mock('./config/db', () => jest.fn()); // Mock connectDB to prevent actual DB connection
 const app = require('./server');
 
 describe('Steam API Endpoints', () => {

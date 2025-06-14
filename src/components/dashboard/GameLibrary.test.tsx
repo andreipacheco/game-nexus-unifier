@@ -1,8 +1,9 @@
 import React from 'react';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { GameLibrary } from './GameLibrary'; // Adjust path as necessary
-import { Game } from '@/data/mockGameData'; // Assuming Game type is exported
+import { GameLibrary } from './GameLibrary';
+import { Game, SteamUserProfile } from '@/data/mockGameData'; // Assuming Game type is exported, added SteamUserProfile for mock
+import { useSteam } from '@/contexts/SteamContext'; // Import useSteam
 import fetchMock from 'jest-fetch-mock';
 
 // Mock lucide-react icons
@@ -21,6 +22,7 @@ jest.mock('lucide-react', () => {
 jest.mock('./GameCard', () => ({
   GameCard: ({ game }: { game: Game }) => (
     <div data-testid={`game-card-${game.id}`} aria-label={game.title}>
+      {/* Added comment to ensure diff picks up this block for search if needed */}
       {game.title}
     </div>
   ),
@@ -32,65 +34,86 @@ const mockGames: Game[] = [
 ];
 
 describe('GameLibrary Component', () => {
+// Mock useSteam hook
+jest.mock('@/contexts/SteamContext', () => ({
+  useSteam: jest.fn(),
+}));
+
+const mockUseSteam = useSteam as jest.Mock;
+
+
+describe('GameLibrary Component', () => {
   beforeEach(() => {
     fetchMock.resetMocks();
+    mockUseSteam.mockReturnValue({ // Default mock for tests not focusing on Steam
+      steamId: null,
+      steamUser: null,
+      isLoadingSteamProfile: false,
+      steamProfileError: null,
+    });
   });
 
-  it('should render local games initially', () => {
+  it('should render local games initially when no steamId in context', () => {
     render(<GameLibrary games={mockGames} selectedPlatform="all" onPlatformChange={() => {}} />);
     expect(screen.getByText('Local Game 1')).toBeInTheDocument();
     expect(screen.getByText('Local Game 2')).toBeInTheDocument();
+    expect(screen.queryByText('Counter-Strike 2')).not.toBeInTheDocument(); // Steam game should not be there
   });
 
-  it('should fetch and display Steam games when steamId is provided', async () => {
+  it('should fetch and display Steam games when steamId and steamUser are in context', async () => {
     const mockSteamGames = [
       { appID: 730, name: 'Counter-Strike 2', playtimeForever: 12000, imgIconURL: 'csgo.jpg' },
       { appID: 570, name: 'Dota 2', playtimeForever: 30000, imgIconURL: 'dota2.jpg' },
     ];
     fetchMock.mockResponseOnce(JSON.stringify(mockSteamGames));
-
     const steamId = 'teststeamid123';
+    const mockSteamProfile: SteamUserProfile = { personaName: 'TestSteam', avatarFull: 'avatar.jpg', profileUrl: 'url' };
+    mockUseSteam.mockReturnValue({
+      steamId: steamId,
+      steamUser: mockSteamProfile, // steamUser is needed for the filter to appear
+      isLoadingSteamProfile: false,
+      steamProfileError: null,
+    });
+
     render(
       <GameLibrary
         games={mockGames}
         selectedPlatform="all"
         onPlatformChange={() => {}}
-        steamId={steamId}
+        // steamId prop removed
       />
     );
-
-    // Check for loading state (optional, depends on how quick the mock resolves)
-    // expect(screen.getByText('Loading Steam games...')).toBeInTheDocument(); // Or check for loader icon
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(`/api/steam/user/${steamId}/games`);
     });
 
-    // Check if Steam games are displayed (transformed to Game type by the component)
+    // Check if Steam games are displayed
     expect(await screen.findByText('Counter-Strike 2')).toBeInTheDocument();
     expect(await screen.findByText('Dota 2')).toBeInTheDocument();
+    expect(screen.getByText('Local Game 1')).toBeInTheDocument(); // Local games still present
 
-    // Check if local games are still there
-    expect(screen.getByText('Local Game 1')).toBeInTheDocument();
-
-    // Check if "Steam" platform filter button is available
     const steamPlatformButton = await screen.findByRole('button', { name: /Steam/ });
     expect(steamPlatformButton).toBeInTheDocument();
-    // Check count on steam platform button (2 steam games)
-    expect(within(steamPlatformButton).getByText('2')).toBeInTheDocument();
-
+    expect(within(steamPlatformButton).getByText('2')).toBeInTheDocument(); // Count for Steam games
   });
 
-  it('should display an error message if fetching Steam games fails', async () => {
+  it('should display an error message if fetching Steam games fails when steamId is in context', async () => {
     fetchMock.mockResponseOnce(JSON.stringify({ error: 'Failed to load Steam games' }), { status: 500 });
     const steamId = 'errorsteamid';
+    const mockSteamProfile: SteamUserProfile = { personaName: 'TestSteam', avatarFull: 'avatar.jpg', profileUrl: 'url' };
+    mockUseSteam.mockReturnValue({
+      steamId: steamId,
+      steamUser: mockSteamProfile,
+      isLoadingSteamProfile: false,
+      steamProfileError: null,
+    });
 
     render(
       <GameLibrary
         games={mockGames}
         selectedPlatform="all"
         onPlatformChange={() => {}}
-        steamId={steamId}
       />
     );
 
@@ -99,34 +122,49 @@ describe('GameLibrary Component', () => {
     });
 
     expect(await screen.findByText('Error Loading Steam Games')).toBeInTheDocument();
-    expect(await screen.findByText('Failed to load Steam games')).toBeInTheDocument(); // The specific error message from API
+    expect(await screen.findByText('Failed to load Steam games')).toBeInTheDocument();
   });
 
-  it('should display loading indicator for Steam games', async () => {
+  it('should display loading indicator for Steam games when steamId is in context', async () => {
     fetchMock.mockResponseOnce(async () => {
-      await new Promise(resolve => setTimeout(resolve, 100)); // delay response
+      await new Promise(resolve => setTimeout(resolve, 100));
       return JSON.stringify([]);
     });
     const steamId = 'loadingsteamid';
+    const mockSteamProfile: SteamUserProfile = { personaName: 'TestSteam', avatarFull: 'avatar.jpg', profileUrl: 'url' };
+    mockUseSteam.mockReturnValue({
+      steamId: steamId,
+      steamUser: mockSteamProfile,
+      isLoadingSteamProfile: false,
+      steamProfileError: null,
+    });
 
     render(
       <GameLibrary
         games={[]}
         selectedPlatform="all"
         onPlatformChange={() => {}}
-        steamId={steamId}
       />
     );
-    // Check that loading text IS present initially
     expect(screen.getByText('Loading Steam games...')).toBeInTheDocument();
 
-    // Wait for the fetch to complete and the loading text to DISAPPEAR
     await waitFor(() => {
       expect(screen.queryByText('Loading Steam games...')).not.toBeInTheDocument();
     });
-    // Also ensure fetch was called
     expect(fetchMock).toHaveBeenCalledWith(`/api/steam/user/${steamId}/games`);
   });
 
-  // TODO: Add tests for filtering behavior when Steam games are present
+  it('should not fetch Steam games if steamId is null in context', () => {
+    mockUseSteam.mockReturnValue({ // steamId is null by default in this mock setup
+        steamId: null,
+        steamUser: null,
+        isLoadingSteamProfile: false,
+        steamProfileError: null,
+    });
+    render(<GameLibrary games={mockGames} selectedPlatform="all" onPlatformChange={() => {}} />);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: /Steam/ })).not.toBeInTheDocument(); // Steam filter should not show
+  });
+
+  // TODO: Add tests for filtering behavior when Steam games are present and selectedPlatform changes
 });

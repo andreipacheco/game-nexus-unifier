@@ -21,8 +21,10 @@ interface GameLibraryProps {
   games: Game[]; // Existing games (e.g., from other platforms or manual entries)
   selectedPlatform: string;
   onPlatformChange: (platform: string) => void;
-  steamId?: string; // Optional Steam ID
+  // steamId?: string; // Steam ID will now come from context
 }
+
+import { useSteam } from "@/contexts/SteamContext"; // Import useSteam
 
 // Helper to convert SteamGame to Game for consistent display, or GameCard could be adapted
 const steamGameToGameType = (steamGame: SteamGame): Game => ({
@@ -39,7 +41,8 @@ const steamGameToGameType = (steamGame: SteamGame): Game => ({
 });
 
 
-export const GameLibrary = ({ games, selectedPlatform, onPlatformChange, steamId }: GameLibraryProps) => {
+export const GameLibrary = ({ games, selectedPlatform, onPlatformChange }: GameLibraryProps) => {
+  const { steamId, steamUser } = useSteam(); // Get steamId and steamUser from context
   const [searchTerm, setSearchTerm] = useState("");
   const [steamGames, setSteamGames] = useState<SteamGame[]>([]);
   const [isLoadingSteamGames, setIsLoadingSteamGames] = useState<boolean>(false);
@@ -68,11 +71,11 @@ export const GameLibrary = ({ games, selectedPlatform, onPlatformChange, steamId
       };
       fetchSteamGames();
     } else {
-      // Clear Steam games if steamId is removed
+      // Clear Steam games if steamId from context is removed or null
       setSteamGames([]);
       setSteamGamesError(null);
     }
-  }, [steamId]);
+  }, [steamId]); // Effect now depends on steamId from context
 
   const allGames = [
     ...games,
@@ -97,7 +100,7 @@ export const GameLibrary = ({ games, selectedPlatform, onPlatformChange, steamId
       name: info.name,
       count: allGames.filter(game => game.platform === key).length
     }))
-  ].filter(f => f.count > 0 || f.key === 'all' || (f.key === 'steam' && steamId)); // Ensure Steam filter shows if steamId is present
+  ].filter(f => f.count > 0 || f.key === 'all' || (f.key === 'steam' && steamId && steamUser)); // Ensure Steam filter shows if steamId & User is present in context
 
   return (
     <div className="space-y-6">

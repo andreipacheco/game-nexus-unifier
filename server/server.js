@@ -1,11 +1,26 @@
 const express = require('express');
 const dotenv = require('dotenv');
 const SteamAPI = require('steamapi');
+const connectDB = require('./config/db'); // Import connectDB
 
 // Load environment variables from .env file
 dotenv.config();
 
+// Connect to MongoDB
+connectDB();
+
 const app = express();
+
+// Middleware
+app.use(express.json()); // For parsing application/json
+
+// Define Routes
+const authRoutes = require('./routes/auth');
+app.use('/auth', authRoutes);
+
+const userRoutes = require('./routes/user'); // Import user routes
+app.use('/api/user', userRoutes); // Mount user routes
+
 const port = process.env.PORT || 3000;
 
 // Initialize SteamAPI with your API key

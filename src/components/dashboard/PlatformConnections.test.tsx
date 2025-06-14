@@ -1,10 +1,12 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { PlatformConnections } from './PlatformConnections'; // Adjust path as necessary
+import { MemoryRouter, Route, Routes } from 'react-router-dom'; // MemoryRouter for testing
+import { PlatformConnections } from './PlatformConnections';
+import { SteamProvider, useSteam, SteamUserProfile } from '@/contexts/SteamContext'; // Adjust path
 import fetchMock from 'jest-fetch-mock';
 
-// Mock lucide-react icons used in the component
+// Mock lucide-react icons
 jest.mock('lucide-react', () => {
   const original = jest.requireActual('lucide-react');
   return {
@@ -17,108 +19,162 @@ jest.mock('lucide-react', () => {
   };
 });
 
+// Mock the useSteam hook for some tests to control context values directly
+const mockSetSteamConnection = jest.fn();
+const mockFetchSteamProfile = jest.fn();
+const mockClearSteamConnection = jest.fn();
 
-describe('PlatformConnections Component', () => {
+jest.mock('@/contexts/SteamContext', () => ({
+  ...jest.requireActual('@/contexts/SteamContext'), // Import and retain actual SteamProvider for some tests
+  useSteam: jest.fn(() => ({ // Default mock implementation
+    steamId: null,
+    steamUser: null,
+    isLoadingSteamProfile: false,
+    steamProfileError: null,
+    setSteamConnection: mockSetSteamConnection,
+    fetchSteamProfile: mockFetchSteamProfile,
+    clearSteamConnection: mockClearSteamConnection,
+  })),
+}));
+
+
+// Helper to render with providers, including MemoryRouter for location/navigation
+const renderWithProviders = (ui: React.ReactElement, initialEntries: string[] = ['/']) => {
+  return render(
+    <MemoryRouter initialEntries={initialEntries}>
+      <SteamProvider> {/* Use actual provider for callback test, or mock useSteam for others */}
+        {ui}
+      </SteamProvider>
+    </MemoryRouter>
+  );
+};
+const renderWithMockedSteamContext = (ui: React.ReactElement, contextValue: Partial<ReturnType<typeof useSteam>>) => {
+    (useSteam as jest.Mock).mockImplementation(() => ({
+        steamId: null,
+        steamUser: null,
+        isLoadingSteamProfile: false,
+        steamProfileError: null,
+        setSteamConnection: mockSetSteamConnection,
+        fetchSteamProfile: mockFetchSteamProfile,
+        clearSteamConnection: mockClearSteamConnection,
+        ...contextValue, // Override with specific values for the test
+    }));
+    return render(<MemoryRouter>{ui}</MemoryRouter>); // No need for SteamProvider if useSteam is fully mocked
+}
+
+
+describe('PlatformConnections Component (OpenID Flow)', () => {
   beforeEach(() => {
     fetchMock.resetMocks();
+    mockSetSteamConnection.mockClear();
+    mockFetchSteamProfile.mockClear();
+    mockClearSteamConnection.mockClear();
+    // Reset window.location.href spy if used
+    delete window.location;
+    window.location = { ...window.location, href: '', assign: jest.fn(), replace: jest.fn() };
+    window.history.replaceState = jest.fn(); // Mock history.replaceState
   });
 
-  it('should allow connecting to Steam and display user info on success', async () => {
-    const mockSteamUserData = {
-      personaName: 'TestSteamUser',
-      avatarFull: 'test-avatar.jpg',
-      profileUrl: 'http://steamcommunity.com/id/teststeamuser',
-    };
-    fetchMock.mockResponseOnce(JSON.stringify(mockSteamUserData));
-
-    render(<PlatformConnections />);
-
-    // Find the Steam platform card. The text "Steam" should be present.
-    const steamCard = (await screen.findAllByText('Steam'))
-        .map(el => el.closest('div.relative')) // Assuming Card is relative, find parent card
-        .find(card => card !== null && card !== undefined);
-
-    if (!steamCard) throw new Error("Steam platform card not found");
-
-    // Find the "Connect" or "Reconfigure" button for Steam.
-    // The component shows "Connect" if not connected, "Reconfigure" if connected.
-    // Initial state from platforms array has Steam as `connected: false` in the test component's context.
-    // The button is inside a DialogTrigger.
-    const connectButton = Array.from(steamCard.querySelectorAll('button')).find(btn => btn.textContent?.includes('Connect') || btn.textContent?.includes('Reconfigure'));
-    if (!connectButton) throw new Error("Steam connect/reconfigure button not found");
-
-    fireEvent.click(connectButton); // This opens the dialog
-
-    // Wait for the dialog to appear and find the Steam ID input field
-    // The input field's label is "Steam ID"
-    const steamIdInput = await screen.findByLabelText('Steam ID') as HTMLInputElement;
-    fireEvent.change(steamIdInput, { target: { value: 'teststeamid123' } });
-    expect(steamIdInput.value).toBe('teststeamid123');
-
-    // Find and click the "Save & Connect" button in the dialog
-    const saveButton = await screen.findByText('Save & Connect');
-    fireEvent.click(saveButton);
-
-    // Wait for API call and UI update
-    await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith('/api/steam/user/teststeamid123');
-    });
-
-    // The dialog closes on successful connection because `setSelectedPlatform(null)` is called.
-    // Therefore, we should not try to find elements within the dialog after it's expected to close.
-    // We will only check the main card's state.
-
-    // Check if the Steam card itself updated to "Connected"
-    // The component logic updates `platformsState` which should lead to a re-render.
-    // The dialog might close automatically after success (setSelectedPlatform(null)), so we check the main card state.
-    await waitFor(() => {
-      // Re-query the steamCard to get its updated state if dialog closes and card re-renders.
-      // For simplicity, we assume steamCard reference is still valid or query again if needed.
-      // Check for the "Connected" badge text within the specific Steam card.
-      expect(within(steamCard).getByText("Connected")).toBeInTheDocument();
-      // Check for the CheckCircle icon as another indicator
-      expect(within(steamCard).getByTestId("check-icon")).toBeInTheDocument();
-    });
-  });
-
-  it('should display an error message if Steam connection fails', async () => {
-    fetchMock.mockResponseOnce(JSON.stringify({ error: 'Invalid Steam ID' }), { status: 500 });
-
-    render(<PlatformConnections />);
+  it('should redirect to /auth/steam when "Connect Steam" is clicked', async () => {
+    renderWithMockedSteamContext(<PlatformConnections />, { steamId: null, steamUser: null });
 
     const steamCard = (await screen.findAllByText('Steam'))
         .map(el => el.closest('div.relative'))
         .find(card => card !== null && card !== undefined);
     if (!steamCard) throw new Error("Steam platform card not found");
 
-    const connectButton = Array.from(steamCard.querySelectorAll('button')).find(btn => btn.textContent?.includes('Connect'));
-    if (!connectButton) throw new Error("Steam connect button not found");
+    const connectButton = within(steamCard).getByRole('button', { name: /Connect Steam/i });
     fireEvent.click(connectButton);
 
-    const steamIdInput = await screen.findByLabelText('Steam ID') as HTMLInputElement;
-    fireEvent.change(steamIdInput, { target: { value: 'invalidsteamid' } });
-
-    const saveButton = await screen.findByText('Save & Connect');
-    fireEvent.click(saveButton);
-
-    await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith('/api/steam/user/invalidsteamid');
-    });
-
-    // Check for error message display (e.g., the content of steamConnectError)
-    // The error is displayed inside the dialog.
-    await waitFor(async () => {
-      const dialogContent = (await screen.findByRole('dialog', { name: /Connect Steam/i })).closest('[role="dialog"]');
-      if (!dialogContent) throw new Error("Dialog not found for error assertion");
-      expect(within(dialogContent).getByText('Invalid Steam ID')).toBeInTheDocument();
-    });
-
-    // Check that the Steam card still shows "Not Connected"
-    await waitFor(() => {
-      // Re-query the steamCard to get its updated state.
-      expect(within(steamCard).getByText("Not Connected")).toBeInTheDocument();
-      // Check for the XCircle icon as another indicator
-      expect(within(steamCard).getByTestId("x-icon")).toBeInTheDocument();
-    });
+    expect(window.location.href).toBe('http://localhost:3000/auth/steam');
   });
+
+  it('should process successful Steam OpenID callback parameters', async () => {
+    const testSteamId = '76561197960287930';
+    const mockProfile: SteamUserProfile = {
+        personaName: 'Test User',
+        avatarFull: 'avatar.jpg',
+        profileUrl: 'profile.url'
+    };
+    // This mock is for the fetchSteamProfile call inside the context, triggered by PlatformConnections
+    fetchMock.mockResponseOnce(JSON.stringify({ steamid: testSteamId, ...mockProfile }));
+
+    // Render with actual SteamProvider to test its interaction via the component
+    renderWithProviders(<PlatformConnections />, [`/dashboard?steam_login_success=true&steamid=${testSteamId}`]);
+
+    await waitFor(() => {
+      // setSteamConnection is called by PlatformConnections's useEffect, then fetchSteamProfile
+      // These are now part of the actual context a_nd not directly mockable here if using real provider
+      // Instead, we check the outcome: profile display or error state on context
+      // For now, let's verify the fetch that fetchSteamProfile (from context) would make
+       expect(fetchMock).toHaveBeenCalledWith(`/api/steam/user/${testSteamId}`);
+    });
+
+    // After profile fetch, UI should update based on context state.
+    // We need to mock useSteam to return the *updated* context state to check UI.
+    (useSteam as jest.Mock).mockReturnValue({
+        steamId: testSteamId,
+        steamUser: mockProfile,
+        isLoadingSteamProfile: false,
+        steamProfileError: null,
+        setSteamConnection: mockSetSteamConnection, // Keep mocks for other functions
+        fetchSteamProfile: mockFetchSteamProfile,
+        clearSteamConnection: mockClearSteamConnection,
+    });
+
+    // Re-render or find elements based on updated context (tricky without re-rendering the specific component)
+    // This part is better tested by seeing if the UI *eventually* updates.
+    // The component itself will re-render due to context changes from SteamProvider.
+
+    // Check for connected state on the card
+    const steamCard = (await screen.findAllByText('Steam'))
+        .map(el => el.closest('div.relative'))
+        .find(card => card !== null && card !== undefined);
+    if (!steamCard) throw new Error("Steam platform card not found");
+
+    await waitFor(() => {
+        expect(within(steamCard).getByText('Connected')).toBeInTheDocument();
+        expect(within(steamCard).getByText(`Connected as ${mockProfile.personaName}.`)).toBeInTheDocument();
+        expect(within(steamCard).getByRole('img', {name: mockProfile.personaName})).toBeInTheDocument();
+    });
+    expect(window.history.replaceState).toHaveBeenCalledWith({}, document.title, '/dashboard');
+  });
+
+  it('should display error from URL parameter on callback', async () => {
+    renderWithProviders(<PlatformConnections />, ['/dashboard?error=OpenID%20validation%20failed']);
+
+    expect(await screen.findByText(/Steam connection failed: OpenID validation failed/i)).toBeInTheDocument();
+    expect(window.history.replaceState).toHaveBeenCalledWith({}, document.title, '/dashboard');
+  });
+
+  it('should display connected Steam user info if steamId and steamUser are in context', async () => {
+    const mockProfile: SteamUserProfile = { personaName: 'Already Connected', avatarFull: 'connected.jpg', profileUrl: 'connected.url' };
+    renderWithMockedSteamContext(<PlatformConnections />, { steamId: 'existing-id', steamUser: mockProfile });
+
+    const steamCard = (await screen.findAllByText('Steam'))
+        .map(el => el.closest('div.relative'))
+        .find(card => card !== null && card !== undefined);
+    if (!steamCard) throw new Error("Steam platform card not found");
+
+    expect(within(steamCard).getByText('Connected')).toBeInTheDocument();
+    expect(within(steamCard).getByText(`Connected as ${mockProfile.personaName}.`)).toBeInTheDocument();
+    expect(within(steamCard).getByRole('img', {name: mockProfile.personaName})).toBeInTheDocument();
+    expect(within(steamCard).getByRole('button', { name: /Disconnect Steam/i })).toBeInTheDocument();
+  });
+
+  it('"Disconnect Steam" button should call clearSteamConnection from context', async () => {
+    const mockProfile: SteamUserProfile = { personaName: 'To Disconnect', avatarFull: 'disconnect.jpg', profileUrl: 'disconnect.url' };
+    renderWithMockedSteamContext(<PlatformConnections />, { steamId: 'disconnect-id', steamUser: mockProfile });
+
+    const steamCard = (await screen.findAllByText('Steam'))
+        .map(el => el.closest('div.relative'))
+        .find(card => card !== null && card !== undefined);
+    if (!steamCard) throw new Error("Steam platform card not found");
+
+    const disconnectButton = within(steamCard).getByRole('button', { name: /Disconnect Steam/i });
+    fireEvent.click(disconnectButton);
+    expect(mockClearSteamConnection).toHaveBeenCalled();
+  });
+
+});
 });
