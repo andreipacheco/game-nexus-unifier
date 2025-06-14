@@ -1,11 +1,12 @@
 const mongoose = require('mongoose');
-const dotenv = require('dotenv');
+const dotenv = require('dotenv'); // Keep for process.env access, but don't call config() here
+const logger = require('./logger'); // Import logger
 
-// Load .env variables if not already loaded (e.g. when running tests or specific scripts)
-// In server.js, dotenv.config() is already called, but good practice for standalone DB script.
-if (process.env.NODE_ENV !== 'test') { // Avoid loading .env during tests if specific test env vars are used
-  dotenv.config({ path: require('find-config')('.env') || require('path').resolve(__dirname, '../.env') });
-}
+// Assuming dotenv.config() in server.js (or entry point) has already run.
+// No need for:
+// if (process.env.NODE_ENV !== 'test') {
+//   dotenv.config({ path: require('find-config')('.env') || require('path').resolve(__dirname, '../.env') });
+// }
 
 
 const connectDB = async () => {
@@ -16,7 +17,7 @@ const connectDB = async () => {
         // In test environment, throw error to avoid process.exit and allow tests to catch it
         throw new Error(errorMsg);
       }
-      console.error(errorMsg);
+      logger.error(errorMsg); // Use logger
       process.exit(1); // Exit if not in test environment
     }
     await mongoose.connect(process.env.MONGODB_URI, {
@@ -26,9 +27,9 @@ const connectDB = async () => {
       // useCreateIndex: true, // For unique: true in schema
       // useFindAndModify: false,
     });
-    console.log('MongoDB Connected...');
+    logger.info('MongoDB Connected...'); // Use logger
   } catch (err) {
-    console.error('MongoDB connection error:', err.message);
+    logger.error('MongoDB connection error:', { message: err.message, error: err }); // Use logger, include error object
     if (process.env.NODE_ENV === 'test') {
       // In test environment, re-throw the error or a specific error
       // This helps in testing the connection failure itself if needed

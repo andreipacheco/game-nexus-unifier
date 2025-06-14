@@ -1,5 +1,6 @@
-const { Issuer } = require('openid-client');
+// const { Issuer } = require('openid-client'); // To be dynamically imported
 const dotenv = require('dotenv');
+const logger = require('./logger'); // Assuming logger is in the same dir or path is adjusted
 
 // Ensure environment variables are loaded
 // In server.js, dotenv.config() is already called, but good practice for standalone config script.
@@ -15,8 +16,12 @@ const getOpenIDClient = async () => {
   }
 
   try {
+    // Dynamically import openid-client
+    const { Issuer } = await import('openid-client');
+    logger.debug('openid-client module loaded dynamically.');
+
     const steamIssuer = await Issuer.discover('https://steamcommunity.com/openid');
-    // console.log('Discovered issuer %s %O', steamIssuer.issuer, steamIssuer.metadata);
+    logger.debug('Discovered Steam OpenID issuer: %s', steamIssuer.issuer);
 
     if (!process.env.APP_BASE_URL) {
       throw new Error('APP_BASE_URL is not defined in environment variables.');
@@ -35,6 +40,9 @@ const getOpenIDClient = async () => {
     // Depending on the application's needs, you might want to throw the error,
     // or handle it in a way that the app can gracefully degrade.
     // For now, exiting if critical setup fails.
+    // In test env, this will throw due to db.js modification, otherwise process.exit
+    // Consider re-throwing or returning null to let caller handle if process.exit is too harsh.
+    logger.error('Exiting due to OpenID client initialization failure.');
     process.exit(1);
   }
 };

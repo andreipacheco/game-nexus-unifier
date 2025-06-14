@@ -4,6 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "start": "node server.js",
     "test": "cross-env NODE_ENV=test jest"
   },
   "keywords": [],
@@ -12,9 +13,11 @@
   "dependencies": {
     "dotenv": "^16.5.0",
     "express": "^5.1.0",
+    "find-config": "^1.0.0",
     "mongoose": "^8.15.2",
     "openid-client": "^6.5.1",
-    "steamapi": "^3.1.2"
+    "steamapi": "^3.1.2",
+    "winston": "^3.17.0"
   },
   "devDependencies": {
     "@babel/core": "^7.27.4",

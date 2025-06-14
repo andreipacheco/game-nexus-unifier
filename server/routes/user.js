@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const User = require('../models/User'); // Assuming your User model is here
+const logger = require('../config/logger'); // Import logger
 
 // GET /api/user/steam_profile
 // Fetches a user's Steam profile information from the local database
@@ -29,7 +30,7 @@ router.get('/steam_profile', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error fetching user profile from DB:', error);
+    logger.error('Error fetching user profile from DB for steamid %s:', steamid, error);
     res.status(500).json({ error: 'Server error while fetching user profile.' });
   }
 });

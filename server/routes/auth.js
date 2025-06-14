@@ -2,14 +2,37 @@ const express = require('express');
 const router = express.Router();
 const { getOpenIDClient } = require('../config/openid');
 const User = require('../models/User');
-const SteamAPI = require('steamapi'); // To fetch user details
+// const SteamAPI = require('steamapi'); // To be dynamically imported
+const logger = require('../config/logger'); // Import logger
 
-// Ensure STEAM_API_KEY is loaded for SteamAPI
-if (!process.env.STEAM_API_KEY) {
-  console.warn('STEAM_API_KEY is not defined. Steam user data fetching will fail.');
-  // throw new Error('STEAM_API_KEY is not defined in environment variables.');
+let steam; // Will hold the SteamAPI instance for this module
+
+async function initializeAuthSteamAPI() {
+  console.log('[DEBUG] auth.js: initializeAuthSteamAPI() called.');
+  if (steam) {
+    console.log('[DEBUG] auth.js: SteamAPI already initialized.');
+    return steam; // Already initialized
+  }
+  try {
+    console.log('[DEBUG] auth.js: Attempting to import steamapi...');
+    const steamapiModule = await import('steamapi');
+    console.log('[DEBUG] auth.js: steamapi imported successfully.');
+    const SteamAPIConstructor = steamapiModule.default;
+    if (!process.env.STEAM_API_KEY) {
+      logger.warn('STEAM_API_KEY is not defined in auth.js. Steam user data fetching will fail.');
+    }
+    steam = new SteamAPIConstructor(process.env.STEAM_API_KEY);
+    logger.info('SteamAPI initialized for auth routes.');
+    return steam;
+  } catch (err) {
+    console.error('[DEBUG] auth.js: Failed to initialize SteamAPI for auth routes:', err);
+    logger.error('Failed to initialize SteamAPI for auth routes:', err);
+    throw err;
+  }
 }
-const steam = new SteamAPI(process.env.STEAM_API_KEY);
+// Call initialize at module load, but be aware of top-level await issues if not in ESM module
+// For CJS, better to ensure it's called before needed or make functions get it via await
+// initializeAuthSteamAPI(); // Or call it within routes
 
 // GET /auth/steam - Redirects user to Steam for authentication
 router.get('/steam', async (req, res) => {
@@ -21,7 +44,7 @@ router.get('/steam', async (req, res) => {
 
     const appBaseUrl = process.env.APP_BASE_URL;
     if (!appBaseUrl) {
-      console.error('APP_BASE_URL is not configured.');
+      logger.error('APP_BASE_URL is not configured.');
       return res.status(500).send('Application base URL is not configured.');
     }
 
@@ -43,11 +66,11 @@ router.get('/steam', async (req, res) => {
       'openid.realm': realm,
     });
 
-    // console.log(`Redirecting to Steam: ${authUrl}`);
+    logger.debug(`Redirecting to Steam auth URL: ${authUrl}`);
     res.redirect(authUrl);
 
   } catch (error) {
-    console.error('Error during Steam auth redirect:', error);
+    logger.error('Error during Steam auth redirect:', error);
     res.status(500).send('Authentication initiation failed.');
   }
 });
@@ -62,7 +85,7 @@ router.get('/steam/callback', async (req, res) => {
 
     const appBaseUrl = process.env.APP_BASE_URL;
     if (!appBaseUrl) {
-      console.error('APP_BASE_URL is not configured.');
+      logger.error('APP_BASE_URL is not configured.');
       return res.status(500).send('Application base URL is not configured.');
     }
     const returnToUrl = `${appBaseUrl}/auth/steam/callback`;
@@ -71,7 +94,7 @@ router.get('/steam/callback', async (req, res) => {
     // The openid-client library expects the full request URL or query parameters.
     // req.query will contain the OpenID response parameters.
     const params = client.callbackParams(req);
-    // console.log('Received callback params:', params);
+    logger.debug('Received callback params from Steam:', params);
 
     // Validate the assertion
     // For Steam's OpenID, the claimed_id is the key piece of information.
@@ -83,8 +106,8 @@ router.get('/steam/callback', async (req, res) => {
     };
 
     const tokenSet = await client.callback(returnToUrl, params, checks);
-    // console.log('received and validated tokenset %j', tokenSet);
-    // console.log('validated ID Token claims %j', tokenSet.claims());
+    logger.debug('Received and validated tokenset:', tokenSet);
+    logger.debug('Validated ID Token claims:', tokenSet.claims());
 
     const claimedId = tokenSet.claims()['openid.claimed_id'];
     if (!claimedId) {
@@ -106,9 +129,13 @@ router.get('/steam/callback', async (req, res) => {
       // User exists, potentially update their info if needed
       // For example, if personaName or avatar might change on Steam.
       // You could fetch fresh summary here or rely on a periodic sync.
-      console.log(`User found: ${user.personaName} (SteamID: ${steamId})`);
+      logger.info(`User found: ${user.personaName} (SteamID: ${steamId}). Updating profile.`);
+      const currentSteamInstance = await initializeAuthSteamAPI(); // Ensure steam is initialized
+      if (!currentSteamInstance) {
+        throw new Error('SteamAPI not available for fetching user summary in auth callback.');
+      }
       // Optionally, update some fields if they might change on Steam
-      const summary = await steam.getUserSummary(steamId);
+      const summary = await currentSteamInstance.getUserSummary(steamId);
       user.personaName = summary.nickname; // SteamAPI calls it nickname
       user.avatar = summary.avatar.large; // or medium/full
       user.profileUrl = summary.url;
@@ -116,7 +143,11 @@ router.get('/steam/callback', async (req, res) => {
 
     } else {
       // New user, fetch their details from Steam API and create them
-      const summary = await steam.getUserSummary(steamId);
+      const currentSteamInstance = await initializeAuthSteamAPI(); // Ensure steam is initialized
+      if (!currentSteamInstance) {
+        throw new Error('SteamAPI not available for fetching user summary in auth callback.');
+      }
+      const summary = await currentSteamInstance.getUserSummary(steamId);
       if (!summary) {
         throw new Error(`Failed to fetch Steam user summary for SteamID: ${steamId}`);
       }
@@ -127,20 +158,20 @@ router.get('/steam/callback', async (req, res) => {
         profileUrl: summary.url,
       });
       await user.save();
-      console.log(`New user created: ${user.personaName} (SteamID: ${steamId})`);
+      logger.info(`New user created: ${user.personaName} (SteamID: ${steamId})`);
     }
 
     // TODO: Implement session management (e.g., using express-session and storing user._id in session)
     // For now, just redirecting.
     // In a real app, you'd likely set a cookie or JWT here.
-    console.log(`Authentication successful for SteamID: ${steamId}. Redirecting to frontend.`);
+    logger.info(`Authentication successful for SteamID: ${steamId}. Redirecting to frontend.`);
     res.redirect(`${appBaseUrl}/dashboard?steam_login_success=true&steamid=${steamId}`); // Or to a page that indicates login success
 
   } catch (error) {
-    console.error('Error in Steam callback:', error);
+    logger.error('Error in Steam callback:', { message: error.message, error: error });
     // Check if error is from openid-client to provide more specific feedback
     if (error.name === 'OPError') {
-        console.error('OpenID Protocol Error:', error.message, error.response ? error.response.body : '');
+        logger.error('OpenID Protocol Error details:', { errorMessage: error.message, errorBody: error.response ? error.response.body : 'N/A' });
         return res.status(400).send(`OpenID Authentication Failed: ${error.message}`);
     }
     // Handle specific custom errors for testing
