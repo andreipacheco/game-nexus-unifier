@@ -91,8 +91,8 @@ export const PlatformConnections = () => {
 
   // Effect to handle Steam OpenID callback
   useEffect(() => {
-    const queryParams = new URLSearchParams(location.search);
-    const queryParams = new URLSearchParams(location.search);
+    const queryParams = new URLSearchParams(location.search); // Keep first occurrence
+    // const queryParams = new URLSearchParams(location.search); // Remove second occurrence
     const steamLoginSuccess = queryParams.get('steam_login_success');
     // const returnedSteamId = queryParams.get('steamid'); // No longer primary driver for fetch here
     const errorParam = queryParams.get('error');
