@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const logger = require('../config/logger');
 const axios = require('axios'); // Using axios for HTTP requests
+const SteamGame = require('../models/SteamGame'); // Import the SteamGame model
 
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -24,10 +25,44 @@ router.get('/user/:steamId/games', async (req, res) => {
     return res.status(400).json({ error: 'Steam ID is required.' });
   }
 
+  // --- MongoDB Cache Check ---
+  try {
+    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    // Fetch games updated in the last 24 hours, or games that have never been updated (for initial fetch)
+    // This also implies that if a game was fetched but had no achievements (default values),
+    // and lastUpdated is old, it will be re-fetched.
+    const dbGames = await SteamGame.find({
+      steamId: steamId,
+      lastUpdated: { $gte: twentyFourHoursAgo }
+    }).sort({ name: 1 }); // Optionally sort by name
+
+    if (dbGames.length > 0) {
+      logger.info(`Serving ${dbGames.length} games from cache for steamId: ${steamId}`);
+      return res.json(dbGames.map(game => ({
+        appID: game.appId, // Ensure consistent output format
+        name: game.name,
+        playtimeForever: game.playtimeForever,
+        imgIconURL: game.imgIconURL,
+        imgLogoURL: game.imgLogoURL,
+        achievements: game.achievements,
+        // lastUpdated: game.lastUpdated // Optionally include for debugging
+      })));
+    }
+    logger.info(`No fresh games in cache for steamId: ${steamId}. Fetching from Steam API.`);
+  } catch (dbError) {
+    logger.error('Error fetching games from MongoDB cache:', {
+      steamId,
+      errorMessage: dbError.message,
+      errorStack: dbError.stack,
+    });
+    // Do not return yet, proceed to fetch from Steam API as a fallback
+  }
+  // --- End MongoDB Cache Check ---
+
   const ownedGamesApiUrl = `http://api.steampowered.com/IPlayerService/GetOwnedGames/v0001/`;
 
   try {
-    logger.info(`Fetching Steam games for steamId: ${steamId}`);
+    logger.info(`Fetching Steam games from API for steamId: ${steamId}`);
     const ownedGamesResponse = await axios.get(ownedGamesApiUrl, {
       params: {
         key: STEAM_API_KEY,
@@ -88,10 +123,49 @@ router.get('/user/:steamId/games', async (req, res) => {
         });
       }
       logger.info(`Successfully processed achievements for ${ownedGames.length} games for steamId: ${steamId}`);
-      res.json(gamesWithDetails);
+
+      // --- Save to MongoDB ---
+      if (gamesWithDetails.length > 0) {
+        logger.info(`Saving/updating ${gamesWithDetails.length} games to MongoDB for steamId: ${steamId}`);
+        for (const gameDetail of gamesWithDetails) {
+          const gameDataToSave = {
+            steamId: steamId,
+            appId: gameDetail.appID, // Make sure to use appID from the processed details
+            name: gameDetail.name,
+            playtimeForever: gameDetail.playtimeForever,
+            imgIconURL: gameDetail.imgIconURL,
+            imgLogoURL: gameDetail.imgLogoURL,
+            achievements: gameDetail.achievements,
+            lastUpdated: new Date()
+          };
+
+          try {
+            await SteamGame.findOneAndUpdate(
+              { steamId: steamId, appId: gameDetail.appID }, // query
+              gameDataToSave, // document to insert or update
+              { upsert: true, new: true, setDefaultsOnInsert: true } // options
+            );
+          } catch (dbSaveError) {
+            logger.error(`Failed to save game ${gameDetail.appID} to MongoDB for steamId ${steamId}:`, {
+              errorMessage: dbSaveError.message,
+              errorStack: dbSaveError.stack,
+              gameData: gameDataToSave // Log the data that failed to save
+            });
+            // Continue to save other games even if one fails
+          }
+        }
+        logger.info(`Finished saving/updating games to MongoDB for steamId: ${steamId}`);
+      }
+      // --- End Save to MongoDB ---
+
+      res.json(gamesWithDetails); // Return the fresh data from API
 
     } else if (ownedGamesResponse.data && ownedGamesResponse.data.response && ownedGamesResponse.data.response.game_count === 0) {
       logger.info(`No games found for steamId: ${steamId} or profile might be private.`);
+      // Even if no games are found, we might want to "cache" this information,
+      // e.g., by storing a record indicating the user has no games or the profile is private,
+      // to avoid hitting the Steam API repeatedly for such cases.
+      // For now, just return empty array. Consider this for future enhancement.
       res.json([]); // Return empty array if no games or profile private
     }
     else {
