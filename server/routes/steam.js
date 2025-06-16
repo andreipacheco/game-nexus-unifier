@@ -3,6 +3,8 @@ const router = express.Router();
 const logger = require('../config/logger');
 const axios = require('axios'); // Using axios for HTTP requests
 
+const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+
 // Ensure STEAM_API_KEY is loaded (typically from .env file)
 const STEAM_API_KEY = process.env.STEAM_API_KEY;
 
@@ -22,11 +24,11 @@ router.get('/user/:steamId/games', async (req, res) => {
     return res.status(400).json({ error: 'Steam ID is required.' });
   }
 
-  const steamApiUrl = `http://api.steampowered.com/IPlayerService/GetOwnedGames/v0001/`;
+  const ownedGamesApiUrl = `http://api.steampowered.com/IPlayerService/GetOwnedGames/v0001/`;
 
   try {
     logger.info(`Fetching Steam games for steamId: ${steamId}`);
-    const response = await axios.get(steamApiUrl, {
+    const ownedGamesResponse = await axios.get(ownedGamesApiUrl, {
       params: {
         key: STEAM_API_KEY,
         steamid: steamId,
@@ -36,32 +38,68 @@ router.get('/user/:steamId/games', async (req, res) => {
       }
     });
 
-    if (response.data && response.data.response && response.data.response.games) {
-      // The actual game data is in response.data.response.games
-      // The frontend expects an array of games directly.
-      // The Steam API returns games with appid, name, playtime_forever, img_icon_url, img_logo_url
-      // Let's map them to what the frontend SteamGame interface might expect,
-      // though the frontend will do its own transformation to the common Game type.
-      const games = response.data.response.games.map(game => ({
-        appID: game.appid, // Consistent with frontend 'SteamGame' interface
-        name: game.name,
-        playtimeForever: game.playtime_forever, // Consistent with frontend
-        imgIconURL: game.img_icon_url, // Consistent with frontend
-        imgLogoURL: game.img_logo_url // Optional, but good to pass if available
-        // Add other fields if the Steam API provides more that are directly useful
-      }));
-      logger.info(`Successfully fetched ${games.length} games for steamId: ${steamId}`);
-      res.json(games);
-    } else if (response.data && response.data.response && response.data.response.game_count === 0) {
+    let gamesWithDetails = [];
+    if (ownedGamesResponse.data && ownedGamesResponse.data.response && ownedGamesResponse.data.response.games) {
+      const ownedGames = ownedGamesResponse.data.response.games;
+      logger.info(`Fetched ${ownedGames.length} owned games for steamId: ${steamId}. Now fetching achievements...`);
+
+      for (const game of ownedGames) {
+        let achievementsData = { unlocked: 0, total: 0 }; // Default
+        try {
+          const achievementsApiUrl = `http://api.steampowered.com/ISteamUserStats/GetPlayerAchievements/v1/`;
+          const achievementResponse = await axios.get(achievementsApiUrl, {
+            params: {
+              key: STEAM_API_KEY,
+              steamid: steamId,
+              appid: game.appid,
+              // l: 'english' // Optional: if you need names/descriptions later
+            }
+          });
+
+          if (achievementResponse.data && achievementResponse.data.playerstats && achievementResponse.data.playerstats.achievements) {
+            const achievementsArray = achievementResponse.data.playerstats.achievements;
+            achievementsData.unlocked = achievementsArray.filter(ach => ach.achieved).length;
+            achievementsData.total = achievementsArray.length;
+          } else if (achievementResponse.data && achievementResponse.data.playerstats && achievementResponse.data.playerstats.success === false && achievementResponse.data.playerstats.error) {
+             // Game might not have achievements, or an error specific to this game's achievements
+             logger.warn(`Could not retrieve achievements for game ${game.appid} (Steam error): ${achievementResponse.data.playerstats.error}`, { steamId });
+          } else if (achievementResponse.data && achievementResponse.data.playerstats && !achievementResponse.data.playerstats.achievements) {
+            // This case handles when playerstats object exists but achievements array is missing (e.g. game has no achievements setup)
+            logger.info(`No achievements found for game ${game.appid} (playerstats present but no achievements array).`, { steamId });
+          }
+          // Add a small delay to avoid hitting API rate limits
+          await delay(150); // e.g., 150ms delay between each achievement fetch
+        } catch (achError) {
+          logger.warn(`Failed to fetch achievements for game ${game.appid}: ${achError.message}`, {
+            steamId,
+            axiosErrorDetails: achError.response ? { status: achError.response.status, data: achError.response.data } : 'N/A'
+          });
+          // Fallback to default achievementsData is already in place
+           await delay(50); // Shorter delay on error before next attempt/game
+        }
+
+        gamesWithDetails.push({
+          appID: game.appid,
+          name: game.name,
+          playtimeForever: game.playtime_forever,
+          imgIconURL: game.img_icon_url,
+          imgLogoURL: game.img_logo_url,
+          achievements: achievementsData
+        });
+      }
+      logger.info(`Successfully processed achievements for ${ownedGames.length} games for steamId: ${steamId}`);
+      res.json(gamesWithDetails);
+
+    } else if (ownedGamesResponse.data && ownedGamesResponse.data.response && ownedGamesResponse.data.response.game_count === 0) {
       logger.info(`No games found for steamId: ${steamId} or profile might be private.`);
       res.json([]); // Return empty array if no games or profile private
     }
     else {
       // This case handles unexpected structure from Steam API or empty response
-      logger.warn('Steam API response structure was not as expected or empty.', { steamId, responseData: response.data });
+      logger.warn('Steam API response structure was not as expected or empty.', { steamId, responseData: ownedGamesResponse.data });
       // If response.data.response is empty (e.g. private profile), it returns {}
       // Check for this specific case.
-      if (response.data && Object.keys(response.data.response).length === 0) {
+      if (ownedGamesResponse.data && Object.keys(ownedGamesResponse.data.response).length === 0) {
         logger.info(`No games found for steamId: ${steamId} (profile might be private or no games).`);
         res.json([]);
       } else {
@@ -69,7 +107,7 @@ router.get('/user/:steamId/games', async (req, res) => {
       }
     }
   } catch (error) {
-    logger.error('Error fetching Steam games:', {
+    logger.error('Error fetching Steam games (main GetOwnedGames call):', {
       steamId,
       errorMessage: error.message,
       errorStack: error.stack,
@@ -79,12 +117,12 @@ router.get('/user/:steamId/games', async (req, res) => {
     if (error.response) {
         // Forward appropriate status code if available, otherwise default to 500
         res.status(error.response.status || 500).json({
-            error: 'Failed to fetch games from Steam.',
+            error: 'Failed to fetch games from Steam (main GetOwnedGames call).',
             details: error.response.data
         });
     } else {
         // For other errors (network issues, timeouts, etc.)
-        res.status(500).json({ error: 'Failed to fetch games from Steam due to a server-side or network error.' });
+        res.status(500).json({ error: 'Failed to fetch games from Steam (main GetOwnedGames call) due to a server-side or network error.' });
     }
   }
 });
