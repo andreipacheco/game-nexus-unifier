@@ -104,6 +104,13 @@ app.get('/api/steam/user/:steamid', async (req, res) => {
 
 // Use steam routes
 app.use('/api/steam', steamRoutes);
+console.log('[DEBUG] server.js: Steam routes mounted.');
+
+// Import and use GOG routes
+const gogRoutes = require('./routes/gog');
+app.use('/api/gog', gogRoutes);
+console.log('[DEBUG] server.js: GOG routes mounted.');
+
 console.log('[DEBUG] server.js: Core routes defined.');
 
 

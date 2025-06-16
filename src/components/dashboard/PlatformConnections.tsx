@@ -3,7 +3,8 @@ import { useState, useEffect, useCallback } from "react"; // Added useCallback
 import { useLocation, useNavigate } from "react-router-dom"; // For URL param handling
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { useSteam } from "@/contexts/SteamContext"; // Import useSteam
+import { useSteam } from "@/contexts/SteamContext";
+import { useGog } from "@/contexts/GogContext"; // Import useGog
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -83,10 +84,20 @@ export const PlatformConnections = () => {
   const location = useLocation();
   const navigate = useNavigate(); // To clean URL params
 
-  const [selectedPlatform, setSelectedPlatform] = useState<Platform | null>(null); // For other platforms' dialogs
-  const [credentials, setCredentials] = useState<Record<string, string>>({}); // For other platforms
+  const [selectedPlatform, setSelectedPlatform] = useState<Platform | null>(null);
+  const [credentials, setCredentials] = useState<Record<string, string>>({});
   const [platformsState, setPlatformsState] = useState<Platform[]>(platforms);
   const [localSteamError, setLocalSteamError] = useState<string | null>(null);
+  const [gogIdInput, setGogIdInput] = useState<string>(""); // For GOG ID input
+
+  // GOG Context
+  const {
+    gogUserId,
+    connectGogUser,
+    disconnectGogUser,
+    isLoadingGogUserId,
+    gogUserError
+  } = useGog();
 
 
   // Effect to handle Steam OpenID callback
@@ -127,11 +138,17 @@ export const PlatformConnections = () => {
   // Update platformsState based on context's isAuthenticated for Steam
   useEffect(() => {
     setPlatformsState(prevPlatforms =>
-      prevPlatforms.map(p =>
-        p.id === 'steam' ? { ...p, connected: isAuthenticated } : p
-      )
+      prevPlatforms.map(p => {
+        if (p.id === 'steam') {
+          return { ...p, connected: isAuthenticated };
+        }
+        if (p.id === 'gog') {
+          return { ...p, connected: !!gogUserId }; // Update GOG connected status
+        }
+        return p;
+      })
     );
-  }, [isAuthenticated]);
+  }, [isAuthenticated, gogUserId]); // Add gogUserId as a dependency
 
 
   const handleSteamAuthRedirect = () => {
@@ -194,8 +211,15 @@ export const PlatformConnections = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {platformsState.map((platform) => {
           const isSteam = platform.id === 'steam';
-          // For Steam, connection status now comes from context's isAuthenticated
-          const isPlatformConnected = isSteam ? isAuthenticated : platform.connected;
+          const isGog = platform.id === 'gog';
+
+          // Determine connected status
+          let isPlatformConnected = platform.connected;
+          if (isSteam) {
+            isPlatformConnected = isAuthenticated;
+          } else if (isGog) {
+            isPlatformConnected = !!gogUserId && !isLoadingGogUserId;
+          }
 
           return (
             <Card key={platform.id} className="relative">
@@ -219,24 +243,28 @@ export const PlatformConnections = () => {
                   </div>
                 </div>
                 <CardDescription>
-                  {isSteam && contextSteamUser
-                    ? `Connected as ${contextSteamUser.personaName}. `
-                    : isSteam && isContextLoadingSteamProfile && !contextSteamUser // Show loading only if no user yet
-                    ? 'Verifying Steam connection...'
+                  {isSteam && contextSteamUser ? `Connected as ${contextSteamUser.personaName}. `
+                    : isSteam && isContextLoadingSteamProfile && !contextSteamUser ? 'Verifying Steam connection...'
+                    : isGog && gogUserId && !isLoadingGogUserId ? `Connected with GOG User ID: ${gogUserId}. `
+                    : isGog && isLoadingGogUserId ? 'Verifying GOG connection...'
                     : platform.description}
                   {isSteam && contextSteamUser && (
                     <a href={contextSteamUser.profileUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline ml-1">View Profile</a>
                   )}
                 </CardDescription>
-                 {(isSteam && (currentSteamError || contextSteamProfileError)) && ( // Show context error too
-                    <p className="text-sm text-red-500 bg-red-100 p-2 rounded mt-1">{currentSteamError || contextSteamProfileError}</p>
-                  )}
+                {(isSteam && (currentSteamError || contextSteamProfileError)) && (
+                  <p className="text-sm text-red-500 bg-red-100 p-2 rounded mt-1">{currentSteamError || contextSteamProfileError}</p>
+                )}
+                {(isGog && gogUserError) && (
+                  <p className="text-sm text-red-500 bg-red-100 p-2 rounded mt-1">{gogUserError}</p>
+                )}
               </CardHeader>
               
               <CardContent className="space-y-4">
-                {isSteam ? (
+                {isSteam && (
+                  // Steam UI (existing)
                   <div className="flex flex-col sm:flex-row gap-2">
-                    {isAuthenticated && contextSteamUser ? ( // Show user info and disconnect if authenticated
+                    {isAuthenticated && contextSteamUser ? (
                        <div className="flex-1 space-y-2 text-center">
                         {contextSteamUser.avatarFull && (
                            <img src={contextSteamUser.avatarFull} alt={contextSteamUser.personaName} className="w-16 h-16 rounded-full border-2 border-green-500 mx-auto" />
@@ -246,7 +274,7 @@ export const PlatformConnections = () => {
                           <XCircle className="h-4 w-4 mr-2" /> Disconnect Steam
                         </Button>
                        </div>
-                    ) : ( // Show connect button if not authenticated or no user data
+                    ) : (
                       <Button
                         onClick={handleSteamAuthRedirect}
                         className="flex-1"
@@ -257,8 +285,46 @@ export const PlatformConnections = () => {
                       </Button>
                     )}
                   </div>
-                ) : (
-                  // UI for other platforms (existing dialog logic)
+                )}
+
+                {isGog && (
+                  // GOG UI
+                  <div className="space-y-3">
+                    {gogUserId && !isLoadingGogUserId ? (
+                      <div className="flex flex-col items-center space-y-2">
+                        <p className="text-sm text-green-600">Connected with GOG User ID: <strong>{gogUserId}</strong></p>
+                        <Button onClick={disconnectGogUser} variant="outline" className="w-full">
+                          <XCircle className="h-4 w-4 mr-2" /> Disconnect GOG
+                        </Button>
+                      </div>
+                    ) : isLoadingGogUserId ? (
+                      <p className="text-sm text-muted-foreground">Loading GOG status...</p>
+                    ) : (
+                      <div className="space-y-2">
+                        <div>
+                          <Label htmlFor="gogUserIdInput">GOG User ID</Label>
+                          <Input
+                            id="gogUserIdInput"
+                            type="text"
+                            placeholder="Enter your GOG User ID"
+                            value={gogIdInput}
+                            onChange={(e) => setGogIdInput(e.target.value)}
+                            className="mt-1"
+                          />
+                           <p className="text-xs text-muted-foreground mt-1">
+                            Note: This is typically a numerical ID. Public GOG data access is limited.
+                          </p>
+                        </div>
+                        <Button onClick={() => connectGogUser(gogIdInput)} className="w-full" disabled={!gogIdInput.trim()}>
+                          <Plug className="h-4 w-4 mr-2" /> Connect GOG
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* UI for other platforms (non-Steam, non-GOG) */}
+                {!isSteam && !isGog && (
                   <>
                     <div>
                       <h4 className="text-sm font-medium mb-2">Required Credentials:</h4>
@@ -276,11 +342,11 @@ export const PlatformConnections = () => {
                         <DialogTrigger asChild>
                           <Button
                             onClick={() => handleConnect(platform)}
-                            variant={platform.connected ? "outline" : "default"}
+                            variant={isPlatformConnected ? "outline" : "default"}
                             className="flex-1"
                           >
                             <Plug className="h-4 w-4 mr-2" />
-                            {platform.connected ? "Reconfigure" : "Connect"}
+                            {isPlatformConnected ? "Reconfigure" : "Connect"}
                           </Button>
                         </DialogTrigger>
                         <DialogContent className="sm:max-w-md">
@@ -329,6 +395,7 @@ export const PlatformConnections = () => {
         })}
       </div>
       
+      {/* Integration Status Card - Updated to reflect GOG connection */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center space-x-2">
@@ -341,7 +408,11 @@ export const PlatformConnections = () => {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {platformsState.filter(p => (p.id === 'steam' ? isAuthenticated : p.connected)).map((platform) => (
+            {platformsState.filter(p => {
+              if (p.id === 'steam') return isAuthenticated;
+              if (p.id === 'gog') return !!gogUserId;
+              return p.connected;
+            }).map((platform) => (
               <div key={platform.id} className="space-y-2">
                 <div className="flex items-center space-x-2">
                   <div className="text-lg">{platform.icon}</div>
@@ -351,7 +422,7 @@ export const PlatformConnections = () => {
                   <div>✓ Game Library</div>
                   <div>✓ Playtime Data</div>
                   <div>✓ Achievements</div>
-                  <div>✓ Last Played</div>
+                  <div>✓ Last Played</div> {/* Note: GOG API might not provide all these accurately */}
                 </div>
                 {platform.id === 'steam' && contextSteamUser && isAuthenticated && (
                   <div className="text-xs p-2 bg-blue-50 rounded border border-blue-200">
@@ -359,9 +430,18 @@ export const PlatformConnections = () => {
                     <p>SteamID: {contextSteamId}</p>
                   </div>
                 )}
+                {platform.id === 'gog' && gogUserId && (
+                  <div className="text-xs p-2 bg-purple-50 rounded border border-purple-200">
+                    <p className="font-medium">GOG User ID: {gogUserId}</p>
+                  </div>
+                )}
               </div>
             ))}
-             {platformsState.filter(p => !(p.id === 'steam' ? isAuthenticated : p.connected)).length === platformsState.length && (
+             {platformsState.filter(p => {
+               if (p.id === 'steam') return !isAuthenticated;
+               if (p.id === 'gog') return !gogUserId;
+               return !p.connected;
+             }).length === platformsState.length && (
               <p className="text-muted-foreground col-span-full">No platforms connected yet.</p>
             )}
           </div>

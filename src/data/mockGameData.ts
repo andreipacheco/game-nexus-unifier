@@ -53,18 +53,6 @@ export const mockGameData: Game[] = [
     releaseYear: 2021
   },
   {
-    id: '4',
-    title: 'The Witcher 3',
-    platform: 'gog',
-    coverImage: '/placeholder.svg',
-    playtime: 203.7,
-    lastPlayed: '2024-06-05',
-    achievements: { unlocked: 34, total: 78 },
-    status: 'installed',
-    genre: ['RPG', 'Fantasy'],
-    releaseYear: 2015
-  },
-  {
     id: '5',
     title: 'Rocket League',
     platform: 'epic',
