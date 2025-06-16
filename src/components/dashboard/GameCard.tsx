@@ -66,9 +66,18 @@ export const GameCard = ({ game }: GameCardProps) => {
         <div className="p-4 space-y-3">
           <div>
             <h3 className="font-semibold line-clamp-1">{game.title}</h3>
+            {((Array.isArray(game.genre) && game.genre.join(', ') !== 'Unknown Genre') || (game.releaseYear !== 0 && game.releaseYear !== 'N/A')) && (
             <p className="text-sm text-muted-foreground">
-              {game.genre.join(', ')} • {game.releaseYear}
+              {(() => {
+                const genreDisplay = Array.isArray(game.genre) && game.genre.join(', ') !== 'Unknown Genre' ? game.genre.join(', ') : null;
+                const yearDisplay = game.releaseYear !== 0 && game.releaseYear !== 'N/A' ? game.releaseYear.toString() : null;
+                let parts = [];
+                if (genreDisplay) parts.push(genreDisplay);
+                if (yearDisplay) parts.push(yearDisplay);
+                return parts.length > 0 ? parts.join(' • ') : null;
+              })()}
             </p>
+            )}
           </div>
           
           <div className="flex items-center justify-between text-sm">
@@ -76,15 +85,19 @@ export const GameCard = ({ game }: GameCardProps) => {
               <Clock className="h-3 w-3" />
               <span>{formatPlaytime(game.playtime)}</span>
             </div>
-            <div className="flex items-center space-x-1">
-              <Trophy className="h-3 w-3" />
-              <span>{achievementProgress}%</span>
-            </div>
+            {game.achievements.total > 0 && (
+              <div className="flex items-center space-x-1">
+                <Trophy className="h-3 w-3" />
+                <span>{achievementProgress}%</span>
+              </div>
+            )}
           </div>
           
-          <div className="text-xs text-muted-foreground">
-            Last played: {new Date(game.lastPlayed).toLocaleDateString()}
-          </div>
+          {game.lastPlayed !== new Date(0).toISOString() && (
+            <div className="text-xs text-muted-foreground">
+              Last played: {new Date(game.lastPlayed).toLocaleDateString()}
+            </div>
+          )}
         </div>
       </CardContent>
       

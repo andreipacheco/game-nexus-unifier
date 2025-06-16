@@ -1,7 +1,9 @@
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react"; // Added useCallback
+import { useLocation, useNavigate } from "react-router-dom"; // For URL param handling
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { useSteam } from "@/contexts/SteamContext"; // Import useSteam
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -23,11 +25,11 @@ const platforms: Platform[] = [
   {
     id: 'steam',
     name: 'Steam',
-    description: 'Connect your Steam library to access game data, playtime, and achievements.',
-    connected: true,
+  description: 'Connect your Steam account to access game data, playtime, and achievements. This connection uses your Steam ID.',
+  connected: false, // Initially not connected
     apiDocUrl: 'https://developer.valvesoftware.com/wiki/Steam_Web_API',
-    requiredCredentials: ['API Key'],
-    icon: '🟦',
+  requiredCredentials: ['Steam ID'], // Changed from API Key to Steam ID
+  icon: '🟦', // Using a simple emoji, can be replaced with FaSteam later
     color: 'bg-blue-600'
   },
   {
@@ -50,6 +52,7 @@ const platforms: Platform[] = [
     icon: '🟢',
     color: 'bg-green-600'
   },
+  // Other platforms remain the same
   {
     id: 'gog',
     name: 'GOG Galaxy',
@@ -62,20 +65,121 @@ const platforms: Platform[] = [
   }
 ];
 
-export const PlatformConnections = () => {
-  const [selectedPlatform, setSelectedPlatform] = useState<Platform | null>(null);
-  const [credentials, setCredentials] = useState<Record<string, string>>({});
+// Keep other platform definitions as they are
 
+export const PlatformConnections = () => {
+  const {
+    steamId: contextSteamId,
+    steamUser: contextSteamUser,
+    isAuthenticated, // Use isAuthenticated from context
+    isLoadingSteamProfile: isContextLoadingSteamProfile,
+    steamProfileError: contextSteamProfileError,
+    // setSteamConnection, // No longer directly setting like this from here
+    // fetchSteamProfile, // No longer directly calling this from here after redirect
+    clearSteamConnection,
+    checkUserSession // Get checkUserSession to refresh context if needed
+  } = useSteam();
+
+  const location = useLocation();
+  const navigate = useNavigate(); // To clean URL params
+
+  const [selectedPlatform, setSelectedPlatform] = useState<Platform | null>(null); // For other platforms' dialogs
+  const [credentials, setCredentials] = useState<Record<string, string>>({}); // For other platforms
+  const [platformsState, setPlatformsState] = useState<Platform[]>(platforms);
+  const [localSteamError, setLocalSteamError] = useState<string | null>(null);
+
+
+  // Effect to handle Steam OpenID callback
+  useEffect(() => {
+    const queryParams = new URLSearchParams(location.search); // Keep first occurrence
+    // const queryParams = new URLSearchParams(location.search); // Remove second occurrence
+    const steamLoginSuccess = queryParams.get('steam_login_success');
+    // const returnedSteamId = queryParams.get('steamid'); // No longer primary driver for fetch here
+    const errorParam = queryParams.get('error');
+
+    if (errorParam) {
+      setLocalSteamError(`Steam connection attempt failed: ${errorParam}`);
+      // Clean URL params - use navigate to truly clear search params
+      navigate(location.pathname, { replace: true });
+      return;
+    }
+
+    if (steamLoginSuccess === 'true') {
+      // Login was successful according to backend redirect.
+      // SteamContext's initial load (useEffect calling checkUserSession) should fetch the user.
+      // We can optionally trigger another checkUserSession here if we want to be absolutely sure
+      // or if we want to handle a "login success" toast/message.
+      console.log('Steam login successful redirect detected. Context should be updating/updated.');
+      // For now, we rely on the initial load of SteamContext.
+      // If a toast message is desired: e.g. toast("Steam connected successfully!")
+
+      // Optionally, force a refresh of user session data if context hasn't updated yet
+      // This might be useful if the component loads before SteamContext's initial checkUserSession completes
+      if (!isAuthenticated && !isContextLoadingSteamProfile) {
+         checkUserSession();
+      }
+
+      // Clean URL params
+      navigate(location.pathname, { replace: true });
+    }
+  }, [location.search, navigate, checkUserSession, isAuthenticated, isContextLoadingSteamProfile]); // Added dependencies
+
+  // Update platformsState based on context's isAuthenticated for Steam
+  useEffect(() => {
+    setPlatformsState(prevPlatforms =>
+      prevPlatforms.map(p =>
+        p.id === 'steam' ? { ...p, connected: isAuthenticated } : p
+      )
+    );
+  }, [isAuthenticated]);
+
+
+  const handleSteamAuthRedirect = () => {
+    window.location.href = 'http://localhost:3000/auth/steam';
+  };
+
+  const handleSteamDisconnect = async () => {
+    try {
+      const response = await fetch('/auth/logout'); // Backend logout
+      if (response.ok) {
+        clearSteamConnection(); // Clear context and localStorage
+        console.log('Successfully logged out from backend and cleared Steam connection.');
+        // Optionally redirect to home or login page via navigate('/')
+      } else {
+        console.error('Backend logout failed. Status:', response.status);
+        setLocalSteamError('Logout failed on the server. Please try again.');
+        // Still clear local connection as a fallback
+        clearSteamConnection();
+      }
+    } catch (error) {
+      console.error('Error during logout request:', error);
+      setLocalSteamError('An error occurred during logout. Please try again.');
+      // Still clear local connection
+      clearSteamConnection();
+    }
+  };
+
+  // Generic connect handler for other platforms (if any use the dialog)
   const handleConnect = (platform: Platform) => {
+    if (platform.id === 'steam') {
+      // Steam connection is handled by redirect or shows connected state
+      return;
+    }
     setSelectedPlatform(platform);
     setCredentials({});
   };
 
+  // Generic save credentials for other platforms
   const handleSaveCredentials = () => {
-    console.log('Saving credentials for', selectedPlatform?.name, credentials);
-    setSelectedPlatform(null);
-    setCredentials({});
+    if (selectedPlatform && selectedPlatform.id !== 'steam') {
+      console.log('Saving credentials for', selectedPlatform.name, credentials);
+      // Actual logic for other platforms...
+      setSelectedPlatform(null);
+      setCredentials({});
+    }
   };
+
+  const currentSteamError = localSteamError || contextSteamProfileError;
 
   return (
     <div className="space-y-6">
@@ -88,102 +192,141 @@ export const PlatformConnections = () => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {platforms.map((platform) => (
-          <Card key={platform.id} className="relative">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <div className="text-2xl">{platform.icon}</div>
-                  <div>
-                    <CardTitle className="flex items-center space-x-2">
-                      <span>{platform.name}</span>
-                      {platform.connected ? (
-                        <CheckCircle className="h-5 w-5 text-green-600" />
-                      ) : (
-                        <XCircle className="h-5 w-5 text-red-600" />
-                      )}
-                    </CardTitle>
-                    <Badge variant={platform.connected ? "default" : "secondary"}>
-                      {platform.connected ? "Connected" : "Not Connected"}
-                    </Badge>
+        {platformsState.map((platform) => {
+          const isSteam = platform.id === 'steam';
+          // For Steam, connection status now comes from context's isAuthenticated
+          const isPlatformConnected = isSteam ? isAuthenticated : platform.connected;
+
+          return (
+            <Card key={platform.id} className="relative">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <div className="text-2xl">{platform.icon}</div>
+                    <div>
+                      <CardTitle className="flex items-center space-x-2">
+                        <span>{platform.name}</span>
+                        {isPlatformConnected ? (
+                          <CheckCircle className="h-5 w-5 text-green-600" />
+                        ) : (
+                          <XCircle className="h-5 w-5 text-red-600" />
+                        )}
+                      </CardTitle>
+                      <Badge variant={isPlatformConnected ? "default" : "secondary"}>
+                        {isPlatformConnected ? "Connected" : "Not Connected"}
+                      </Badge>
+                    </div>
                   </div>
                 </div>
-              </div>
-              <CardDescription>{platform.description}</CardDescription>
-            </CardHeader>
-            
-            <CardContent className="space-y-4">
-              <div>
-                <h4 className="text-sm font-medium mb-2">Required Credentials:</h4>
-                <ul className="text-sm text-muted-foreground space-y-1">
-                  {platform.requiredCredentials.map((cred) => (
-                    <li key={cred} className="flex items-center space-x-2">
-                      <div className="w-1 h-1 bg-current rounded-full" />
-                      <span>{cred}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
+                <CardDescription>
+                  {isSteam && contextSteamUser
+                    ? `Connected as ${contextSteamUser.personaName}. `
+                    : isSteam && isContextLoadingSteamProfile && !contextSteamUser // Show loading only if no user yet
+                    ? 'Verifying Steam connection...'
+                    : platform.description}
+                  {isSteam && contextSteamUser && (
+                    <a href={contextSteamUser.profileUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline ml-1">View Profile</a>
+                  )}
+                </CardDescription>
+                 {(isSteam && (currentSteamError || contextSteamProfileError)) && ( // Show context error too
+                    <p className="text-sm text-red-500 bg-red-100 p-2 rounded mt-1">{currentSteamError || contextSteamProfileError}</p>
+                  )}
+              </CardHeader>
               
-              <div className="flex flex-col sm:flex-row gap-2">
-                <Dialog>
-                  <DialogTrigger asChild>
-                    <Button 
-                      onClick={() => handleConnect(platform)}
-                      variant={platform.connected ? "outline" : "default"}
-                      className="flex-1"
-                    >
-                      <Plug className="h-4 w-4 mr-2" />
-                      {platform.connected ? "Reconfigure" : "Connect"}
-                    </Button>
-                  </DialogTrigger>
-                  
-                  <DialogContent className="sm:max-w-md">
-                    <DialogHeader>
-                      <DialogTitle>Connect {platform.name}</DialogTitle>
-                      <DialogDescription>
-                        Enter your {platform.name} API credentials to connect your account.
-                      </DialogDescription>
-                    </DialogHeader>
-                    
-                    <div className="space-y-4">
-                      {platform.requiredCredentials.map((credentialName) => (
-                        <div key={credentialName} className="space-y-2">
-                          <Label htmlFor={credentialName}>{credentialName}</Label>
-                          <Input
-                            id={credentialName}
-                            type="password"
-                            placeholder={`Enter your ${credentialName}`}
-                            value={credentials[credentialName] || ''}
-                            onChange={(e) => setCredentials(prev => ({
-                              ...prev,
-                              [credentialName]: e.target.value
-                            }))}
-                          />
-                        </div>
-                      ))}
-                      
-                      <div className="flex space-x-2 pt-4">
-                        <Button onClick={handleSaveCredentials} className="flex-1">
-                          Save & Connect
+              <CardContent className="space-y-4">
+                {isSteam ? (
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    {isAuthenticated && contextSteamUser ? ( // Show user info and disconnect if authenticated
+                       <div className="flex-1 space-y-2 text-center">
+                        {contextSteamUser.avatarFull && (
+                           <img src={contextSteamUser.avatarFull} alt={contextSteamUser.personaName} className="w-16 h-16 rounded-full border-2 border-green-500 mx-auto" />
+                        )}
+                        <p className="text-sm font-medium">{contextSteamUser.personaName}</p>
+                        <Button onClick={handleSteamDisconnect} variant="outline" className="w-full">
+                          <XCircle className="h-4 w-4 mr-2" /> Disconnect Steam
                         </Button>
-                        <DialogTrigger asChild>
-                          <Button variant="outline">Cancel</Button>
-                        </DialogTrigger>
-                      </div>
+                       </div>
+                    ) : ( // Show connect button if not authenticated or no user data
+                      <Button
+                        onClick={handleSteamAuthRedirect}
+                        className="flex-1"
+                        disabled={isContextLoadingSteamProfile}
+                      >
+                        <Plug className="h-4 w-4 mr-2" />
+                        {isContextLoadingSteamProfile ? 'Connecting...' : 'Connect Steam'}
+                      </Button>
+                    )}
+                  </div>
+                ) : (
+                  // UI for other platforms (existing dialog logic)
+                  <>
+                    <div>
+                      <h4 className="text-sm font-medium mb-2">Required Credentials:</h4>
+                      <ul className="text-sm text-muted-foreground space-y-1">
+                        {platform.requiredCredentials.map((cred) => (
+                          <li key={cred} className="flex items-center space-x-2">
+                            <div className="w-1 h-1 bg-current rounded-full" />
+                            <span>{cred}</span>
+                          </li>
+                        ))}
+                      </ul>
                     </div>
-                  </DialogContent>
-                </Dialog>
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <Dialog>
+                        <DialogTrigger asChild>
+                          <Button
+                            onClick={() => handleConnect(platform)}
+                            variant={platform.connected ? "outline" : "default"}
+                            className="flex-1"
+                          >
+                            <Plug className="h-4 w-4 mr-2" />
+                            {platform.connected ? "Reconfigure" : "Connect"}
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent className="sm:max-w-md">
+                          <DialogHeader>
+                            <DialogTitle>Connect {platform.name}</DialogTitle>
+                            <DialogDescription>
+                              Enter your {platform.name} API credentials to connect your account.
+                            </DialogDescription>
+                          </DialogHeader>
+                          <div className="space-y-4">
+                            {platform.requiredCredentials.map((credentialName) => (
+                              <div key={credentialName} className="space-y-2">
+                                <Label htmlFor={`${platform.id}-${credentialName}`}>{credentialName}</Label>
+                                <Input
+                                  id={`${platform.id}-${credentialName}`}
+                                  type="password"
+                                  placeholder={`Enter your ${credentialName}`}
+                                  value={credentials[credentialName] || ''}
+                                  onChange={(e) => setCredentials(prev => ({ ...prev, [credentialName]: e.target.value }))}
+                                />
+                              </div>
+                            ))}
+                            <div className="flex space-x-2 pt-4">
+                              <Button onClick={handleSaveCredentials} className="flex-1">
+                                Save & Connect
+                              </Button>
+                              <DialogTrigger asChild>
+                                <Button variant="outline">Cancel</Button>
+                              </DialogTrigger>
+                            </div>
+                          </div>
+                        </DialogContent>
+                      </Dialog>
                 
-                <Button variant="ghost" size="icon" asChild>
-                  <a href={platform.apiDocUrl} target="_blank" rel="noopener noreferrer">
-                    <ExternalLink className="h-4 w-4" />
-                  </a>
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+                      <Button variant="ghost" size="icon" asChild>
+                        <a href={platform.apiDocUrl} target="_blank" rel="noopener noreferrer" title={`${platform.name} API Docs`}>
+                          <ExternalLink className="h-4 w-4" />
+                        </a>
+                      </Button>
+                    </div>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
       
       <Card>
@@ -198,7 +341,7 @@ export const PlatformConnections = () => {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {platforms.filter(p => p.connected).map((platform) => (
+            {platformsState.filter(p => (p.id === 'steam' ? isAuthenticated : p.connected)).map((platform) => (
               <div key={platform.id} className="space-y-2">
                 <div className="flex items-center space-x-2">
                   <div className="text-lg">{platform.icon}</div>
@@ -210,8 +353,17 @@ export const PlatformConnections = () => {
                   <div>✓ Achievements</div>
                   <div>✓ Last Played</div>
                 </div>
+                {platform.id === 'steam' && contextSteamUser && isAuthenticated && (
+                  <div className="text-xs p-2 bg-blue-50 rounded border border-blue-200">
+                    <p className="font-medium">User: {contextSteamUser.personaName}</p>
+                    <p>SteamID: {contextSteamId}</p>
+                  </div>
+                )}
               </div>
             ))}
+             {platformsState.filter(p => !(p.id === 'steam' ? isAuthenticated : p.connected)).length === platformsState.length && (
+              <p className="text-muted-foreground col-span-full">No platforms connected yet.</p>
+            )}
           </div>
         </CardContent>
       </Card>
