@@ -21,6 +21,18 @@ interface SteamGame {
   };
 }
 
+// Basic interface for GOG games (adapt as needed based on actual API response)
+interface GogGame {
+  appID: string; // GOG uses id, which is a string in the backend
+  name: string;
+  imgIconURL: string;
+  playtimeForever: number; // Defaulted to 0 in backend
+  achievements: {
+    unlocked: number;
+    total: number;
+  };
+}
+
 interface GameLibraryProps {
   games: Game[]; // Existing games (e.g., from other platforms or manual entries)
   selectedPlatform: string;
@@ -29,6 +41,7 @@ interface GameLibraryProps {
 }
 
 import { useSteam } from "@/contexts/SteamContext"; // Import useSteam
+import { useGog } from "@/contexts/GogContext"; // Import useGog
 
 // Helper to convert SteamGame to Game for consistent display, or GameCard could be adapted
 const steamGameToGameType = (steamGame: SteamGame): Game | null => {
@@ -71,13 +84,52 @@ const steamGameToGameType = (steamGame: SteamGame): Game | null => {
   };
 };
 
+// Helper to convert GogGame to Game for consistent display
+const gogGameToGameType = (gogGame: GogGame): Game | null => {
+  if (!gogGame || typeof gogGame.appID === 'undefined' || gogGame.appID === null) {
+    console.warn('Skipping GOG game with missing or invalid appID:', gogGame);
+    return null;
+  }
+
+  const gameTitle = gogGame.name || 'Unknown GOG Game';
+  // playtimeForever is already a number (defaulted to 0 in backend)
+  const playtimeHours = gogGame.playtimeForever;
+
+
+  // Default values for fields not present or different in GOG's API response
+  const defaultLastPlayed = new Date(0).toISOString(); // Epoch time as a placeholder
+  const defaultStatus = 'owned'; // GOG games are owned
+  const defaultGenre: string[] = ['Unknown Genre'];
+  const defaultReleaseYear = 0; // Placeholder for unknown year
+
+  return {
+    id: `gog-${gogGame.appID}`, // Unique ID for React keys
+    title: gameTitle,
+    platform: 'gog',
+    coverImage: gogGame.imgIconURL || 'placeholder_cover.svg', // Use imgIconURL as cover, or a placeholder
+    playtime: playtimeHours,
+    lastPlayed: defaultLastPlayed,
+    achievements: gogGame.achievements, // Use achievements data from backend (defaulted)
+    status: defaultStatus,
+    genre: defaultGenre,
+    releaseYear: defaultReleaseYear,
+  };
+};
+
 
 export const GameLibrary = ({ games, selectedPlatform, onPlatformChange }: GameLibraryProps) => {
   const { steamId, steamUser } = useSteam(); // Get steamId and steamUser from context
+  const { gogUserId } = useGog(); // Get gogUserId from GogContext
+
   const [searchTerm, setSearchTerm] = useState("");
   const [steamGames, setSteamGames] = useState<SteamGame[]>([]);
   const [isLoadingSteamGames, setIsLoadingSteamGames] = useState<boolean>(false);
   const [steamGamesError, setSteamGamesError] = useState<string | null>(null);
+
+  // GOG state variables
+  const [gogGames, setGogGames] = useState<GogGame[]>([]);
+  const [isLoadingGogGames, setIsLoadingGogGames] = useState<boolean>(false);
+  const [gogGamesError, setGogGamesError] = useState<string | null>(null);
 
   useEffect(() => {
     if (steamId) {
@@ -108,9 +160,42 @@ export const GameLibrary = ({ games, selectedPlatform, onPlatformChange }: GameL
     }
   }, [steamId]); // Effect now depends on steamId from context
 
+  // useEffect to fetch GOG games
+  useEffect(() => {
+    // Using gogUserId from context now
+    if (gogUserId) {
+      const fetchGogGames = async () => {
+        setIsLoadingGogGames(true);
+        setGogGamesError(null);
+        setGogGames([]);
+        try {
+          // Ensure the gogUserId from context is used in the API call URL
+          const response = await fetch(`/api/gog/user/${gogUserId}/games`);
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.message || `Error: ${response.status}`);
+          }
+          const data: GogGame[] = await response.json();
+          setGogGames(data);
+        } catch (err) {
+          setGogGamesError(err instanceof Error ? err.message : 'Failed to fetch GOG games');
+          console.error("Error fetching GOG games:", err);
+        } finally {
+          setIsLoadingGogGames(false);
+        }
+      };
+      fetchGogGames();
+    } else {
+      // Clear GOG games if gogUserId is removed or null
+      setGogGames([]);
+      setGogGamesError(null);
+    }
+  }, [gogUserId]); // Dependency is now the gogUserId from context
+
   const allGames = [
     ...games,
-    ...(steamGames.map(steamGameToGameType).filter(game => game !== null) as Game[])
+    ...(steamGames.map(steamGameToGameType).filter(game => game !== null) as Game[]),
+    ...(gogGames.map(gogGameToGameType).filter(game => game !== null) as Game[])
   ];
 
   const currentPlatformInfo: PlatformInfo = { // Add steam to platformInfo if not already there for filtering
@@ -152,7 +237,12 @@ export const GameLibrary = ({ games, selectedPlatform, onPlatformChange }: GameL
       name: info.name,
       count: allGames.filter(game => game.platform === key).length
     }))
-  ].filter(f => f.count > 0 || f.key === 'all' || (f.key === 'steam' && steamId && steamUser)); // Ensure Steam filter shows if steamId & User is present in context
+  ].filter(f =>
+    f.count > 0 ||
+    f.key === 'all' ||
+    (f.key === 'steam' && steamId && steamUser) ||
+    (f.key === 'gog' && gogUserId) // Show GOG filter if gogUserId from context is present
+  );
 
   return (
     <div className="space-y-6">
@@ -209,19 +299,48 @@ export const GameLibrary = ({ games, selectedPlatform, onPlatformChange }: GameL
         </Card>
       )}
 
+      {/* GOG Games Loading State */}
+      {isLoadingGogGames && (
+        <Card>
+          <CardContent className="flex items-center justify-center py-12">
+            <Loader2 className="h-8 w-8 animate-spin text-primary mr-3" />
+            <p className="text-muted-foreground">Loading GOG games...</p>
+          </CardContent>
+        </Card>
+      )}
+      {/* GOG Games Error State */}
+      {gogGamesError && !isLoadingGogGames && (
+        <Card className="border-destructive">
+          <CardHeader>
+            <CardTitle className="flex items-center text-destructive">
+              <AlertTriangle className="h-5 w-5 mr-2" />
+              Error Loading GOG Games
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-destructive">{gogGamesError}</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              Could not fetch your GOG games. The GOG integration is experimental. Please try again later.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         {filteredGames.map((game) => (
           <GameCard key={game.id} game={game} />
         ))}
       </div>
 
-      {filteredGames.length === 0 && !isLoadingSteamGames && (
+      {filteredGames.length === 0 && !isLoadingSteamGames && !isLoadingGogGames && (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
             <Search className="h-12 w-12 text-muted-foreground mb-4" />
             <h3 className="text-lg font-medium mb-2">No games found</h3>
             <p className="text-muted-foreground text-center">
-              {selectedPlatform === 'steam' && steamId && !steamGamesError ? 'No Steam games to display or library is private.' : 'Try adjusting your search or platform filter.'}
+              {selectedPlatform === 'steam' && steamId && !steamGamesError && steamGames.length === 0 ? 'No Steam games to display or library is private.' :
+               selectedPlatform === 'gog' && !gogGamesError && gogGames.length === 0 ? 'No GOG games to display.' : // Basic message for GOG
+               'Try adjusting your search or platform filter.'}
             </p>
           </CardContent>
         </Card>

@@ -6,15 +6,17 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import { SteamProvider } from "./contexts/SteamContext"; // Import SteamProvider
+import { GogProvider } from "./contexts/GogContext"; // Import GogProvider
 
 const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <SteamProvider> {/* Wrap with SteamProvider */}
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
+      <GogProvider> {/* Wrap with GogProvider */}
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
         <BrowserRouter>
           <Routes>
             <Route path="/" element={<Index />} />
@@ -24,6 +26,7 @@ const App = () => (
           </Routes>
         </BrowserRouter>
       </TooltipProvider>
+      </GogProvider>
     </SteamProvider>
   </QueryClientProvider>
 );
