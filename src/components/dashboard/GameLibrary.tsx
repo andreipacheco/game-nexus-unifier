@@ -12,9 +12,9 @@ import { GameCard } from "./GameCard";
 interface SteamGame {
   appID: number;
   name: string;
-  playtimeForever: number;
+  playtimeForever: number; // in minutes
   imgIconURL: string;
-  // Potentially add more fields like imgLogoURL for better display
+  imgLogoURL?: string; // Often available, good for a larger image if needed
 }
 
 interface GameLibraryProps {
@@ -44,23 +44,26 @@ const steamGameToGameType = (steamGame: SteamGame): Game | null => {
   // const iconUrl = steamGame.imgIconURL || '';
   // const smallImageUrl = iconUrl ? `https://media.steampowered.com/steamcommunity/public/images/apps/${steamGame.appID}/${iconUrl}.jpg` : 'placeholder_icon.svg';
 
+  // Default values for fields not present in Steam's GetOwnedGames API response
+  const defaultLastPlayed = new Date(0).toISOString(); // Epoch time as a placeholder
+  const defaultAchievements = { unlocked: 0, total: 0 };
+  const defaultStatus = 'not_installed'; // Or 'owned' - 'not_installed' seems reasonable
+  const defaultGenre: string[] = ['Unknown Genre']; // Default to an array with 'Unknown Genre'
+  const defaultReleaseYear = 0; // Placeholder for unknown year
 
   return {
-    id: `steam-${steamGame.appID.toString()}`,
+    id: `steam-${steamGame.appID.toString()}`, // Unique ID for React keys
     title: gameTitle,
     platform: 'steam',
-    status: 'owned',
     coverImage: coverImg,
-    imageUrl: coverImg, // If Game type uses both, or for consistency
+    // imageUrl: coverImg, // Redundant if GameCard uses coverImage, ensure Game uses one primary image prop
     playtime: playtimeHours,
-    achievements: { unlocked: 0, total: 0 },
-    lastPlayed: new Date(0).toISOString(),
-    releaseDate: 'N/A',
-    releaseYear: 'N/A',
-    genre: 'N/A',
-    rating: 0,
-    // Ensure all other fields from the Game interface in mockGameData.ts have defaults
-    // e.g. tags: [], developer: 'N/A', etc.
+    lastPlayed: defaultLastPlayed, // Steam API doesn't provide this in GetOwnedGames
+    achievements: defaultAchievements, // Steam API GetOwnedGames doesn't provide detailed achievement counts
+    status: defaultStatus, // Steam API GetOwnedGames doesn't provide installation status
+    genre: defaultGenre, // Steam API GetOwnedGames doesn't provide genre
+    releaseYear: defaultReleaseYear, // Steam API GetOwnedGames doesn't provide release year
+    // Ensure any other fields from the 'Game' interface (from mockGameData.ts) are considered
   };
 };
 

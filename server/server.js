@@ -63,6 +63,9 @@ const userRoutes = require('./routes/user');
 app.use('/api/user', userRoutes);
 console.log('[DEBUG] server.js: User routes mounted.');
 
+// Import steam routes
+const steamRoutes = require('./routes/steam');
+
 const port = process.env.PORT || 3000;
 
 app.get('/', (req, res) => {
@@ -84,19 +87,23 @@ app.get('/api/steam/user/:steamid', async (req, res) => {
   }
 });
 
-app.get('/api/steam/user/:steamid/games', async (req, res) => {
-  if (!steam) {
-    return res.status(503).json({ error: 'SteamAPI service not available or not initialized.' });
-  }
-  try {
-    const steamID = req.params.steamid;
-    const games = await steam.getUserOwnedGames(steamID);
-    res.json(games);
-  } catch (error) {
-    logger.error('Error fetching Steam user games for steamid %s:', req.params.steamid, error);
-    res.status(500).json({ error: 'Failed to fetch user games from Steam API' });
-  }
-});
+// Comment out or remove existing Steam games route if it conflicts
+// app.get('/api/steam/user/:steamid/games', async (req, res) => {
+//   if (!steam) {
+//     return res.status(503).json({ error: 'SteamAPI service not available or not initialized.' });
+//   }
+//   try {
+//     const steamID = req.params.steamid;
+//     const games = await steam.getUserOwnedGames(steamID);
+//     res.json(games);
+//   } catch (error) {
+//     logger.error('Error fetching Steam user games for steamid %s:', req.params.steamid, error);
+//     res.status(500).json({ error: 'Failed to fetch user games from Steam API' });
+//   }
+// });
+
+// Use steam routes
+app.use('/api/steam', steamRoutes);
 console.log('[DEBUG] server.js: Core routes defined.');
 
 

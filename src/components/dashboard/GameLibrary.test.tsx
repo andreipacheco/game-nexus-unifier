@@ -2,9 +2,12 @@ import React from 'react';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { GameLibrary } from './GameLibrary';
-import { Game, SteamUserProfile } from '@/data/mockGameData'; // Assuming Game type is exported, added SteamUserProfile for mock
+import { Game } from '@/data/mockGameData'; // Assuming Game type is exported
 import { useSteam } from '@/contexts/SteamContext'; // Import useSteam
 import fetchMock from 'jest-fetch-mock';
+
+// Define SteamUserProfile for mockSteamProfile if needed for explicit typing, mirroring SteamContext.tsx
+type SteamUserProfile = { personaName: string; avatarFull: string; profileUrl: string };
 
 // Mock lucide-react icons
 jest.mock('lucide-react', () => {
@@ -29,8 +32,30 @@ jest.mock('./GameCard', () => ({
 }));
 
 const mockGames: Game[] = [
-  { id: '1', title: 'Local Game 1', platform: 'pc', genre: 'RPG', releaseDate: '2023-01-01', imageUrl: '', playtime: 10, achievements: { current: 5, total: 10 }, rating: 5, status: 'played' },
-  { id: '2', title: 'Local Game 2', platform: 'xbox', genre: 'Action', releaseDate: '2022-05-10', imageUrl: '', playtime: 25, achievements: { current: 1, total: 20 }, rating: 4, status: 'owned' },
+  {
+    id: '1',
+    title: 'Local Game 1',
+    platform: 'steam', // Changed from 'pc' to a valid platform
+    coverImage: '/placeholder.svg', // Added from Game interface
+    playtime: 10,
+    lastPlayed: '2024-01-15T10:00:00.000Z', // Added from Game interface
+    achievements: { unlocked: 5, total: 10 }, // Changed 'current' to 'unlocked'
+    status: 'installed', // Changed from 'played' to a valid status
+    genre: ['RPG'], // Changed to string[]
+    releaseYear: 2023, // Changed from releaseDate
+  },
+  {
+    id: '2',
+    title: 'Local Game 2',
+    platform: 'xbox',
+    coverImage: '/placeholder.svg', // Added from Game interface
+    playtime: 25,
+    lastPlayed: '2024-03-20T15:30:00.000Z', // Added from Game interface
+    achievements: { unlocked: 1, total: 20 }, // Changed 'current' to 'unlocked'
+    status: 'not_installed', // Changed from 'owned' to a valid status
+    genre: ['Action'], // Changed to string[]
+    releaseYear: 2022, // Changed from releaseDate
+  },
 ];
 
 describe('GameLibrary Component', () => {
@@ -63,8 +88,8 @@ describe('GameLibrary Component', () => {
 
   it('should fetch and display Steam games when steamId and steamUser are in context', async () => {
     const mockSteamGames = [
-      { appID: 730, name: 'Counter-Strike 2', playtimeForever: 12000, imgIconURL: 'csgo.jpg' },
-      { appID: 570, name: 'Dota 2', playtimeForever: 30000, imgIconURL: 'dota2.jpg' },
+      { appID: 730, name: 'Counter-Strike 2', playtimeForever: 12000, imgIconURL: 'csgo.jpg', imgLogoURL: 'csgo_logo.jpg' },
+      { appID: 570, name: 'Dota 2', playtimeForever: 30000, imgIconURL: 'dota2.jpg', imgLogoURL: 'dota2_logo.jpg' },
     ];
     fetchMock.mockResponseOnce(JSON.stringify(mockSteamGames));
     const steamId = 'teststeamid123';
