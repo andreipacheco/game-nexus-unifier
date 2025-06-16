@@ -10,6 +10,9 @@ const Index = () => {
   const [activeView, setActiveView] = useState<'library' | 'connections'>('library');
   const [selectedPlatform, setSelectedPlatform] = useState<string>('all');
 
+  // Filter out mock Steam games
+  const nonSteamMockGames = mockGameData.filter(game => game.platform !== 'steam');
+
   return (
     <div className="min-h-screen bg-background">
       <DashboardHeader 
@@ -20,9 +23,9 @@ const Index = () => {
       <main className="container mx-auto px-4 py-6 space-y-6">
         {activeView === 'library' ? (
           <>
-            <PlatformStats games={mockGameData} />
+            <PlatformStats games={nonSteamMockGames} />
             <GameLibrary 
-              games={mockGameData}
+              games={nonSteamMockGames}
               selectedPlatform={selectedPlatform}
               onPlatformChange={setSelectedPlatform}
             />
