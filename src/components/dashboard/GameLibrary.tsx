@@ -15,6 +15,10 @@ interface SteamGame {
   playtimeForever: number; // in minutes
   imgIconURL: string;
   imgLogoURL?: string; // Often available, good for a larger image if needed
+  achievements: { // Added this field
+    unlocked: number;
+    total: number;
+  };
 }
 
 interface GameLibraryProps {
@@ -46,7 +50,7 @@ const steamGameToGameType = (steamGame: SteamGame): Game | null => {
 
   // Default values for fields not present in Steam's GetOwnedGames API response
   const defaultLastPlayed = new Date(0).toISOString(); // Epoch time as a placeholder
-  const defaultAchievements = { unlocked: 0, total: 0 };
+  // const defaultAchievements = { unlocked: 0, total: 0 }; // Removed, as backend provides it
   const defaultStatus = 'not_installed'; // Or 'owned' - 'not_installed' seems reasonable
   const defaultGenre: string[] = ['Unknown Genre']; // Default to an array with 'Unknown Genre'
   const defaultReleaseYear = 0; // Placeholder for unknown year
@@ -59,7 +63,7 @@ const steamGameToGameType = (steamGame: SteamGame): Game | null => {
     // imageUrl: coverImg, // Redundant if GameCard uses coverImage, ensure Game uses one primary image prop
     playtime: playtimeHours,
     lastPlayed: defaultLastPlayed, // Steam API doesn't provide this in GetOwnedGames
-    achievements: defaultAchievements, // Steam API GetOwnedGames doesn't provide detailed achievement counts
+    achievements: steamGame.achievements, // Use achievements data from backend
     status: defaultStatus, // Steam API GetOwnedGames doesn't provide installation status
     genre: defaultGenre, // Steam API GetOwnedGames doesn't provide genre
     releaseYear: defaultReleaseYear, // Steam API GetOwnedGames doesn't provide release year

@@ -23,13 +23,24 @@ jest.mock('lucide-react', () => {
 
 // Mock GameCard to simplify testing GameLibrary's logic
 jest.mock('./GameCard', () => ({
-  GameCard: ({ game }: { game: Game }) => (
-    <div data-testid={`game-card-${game.id}`} aria-label={game.title}>
-      {/* Added comment to ensure diff picks up this block for search if needed */}
-      {game.title}
-    </div>
-  ),
+  // GameCard: ({ game }: { game: Game }) => (
+  //   <div data-testid={`game-card-${game.id}`} aria-label={game.title}>
+  //     {/* Added comment to ensure diff picks up this block for search if needed */}
+  //     {game.title}
+  //   </div>
+  // ),
+  // New mock:
+  GameCard: (props: { game: Game }) => {
+    mockGameCard(props); // Capture props passed to GameCard
+    return (
+      <div data-testid={`game-card-${props.game.id}`} aria-label={props.game.title}>
+        {props.game.title} - Achievements: {props.game.achievements.unlocked}/{props.game.achievements.total}
+      </div>
+    );
+  },
 }));
+
+const mockGameCard = jest.fn();
 
 const mockGames: Game[] = [
   {
@@ -70,6 +81,7 @@ const mockUseSteam = useSteam as jest.Mock;
 describe('GameLibrary Component', () => {
   beforeEach(() => {
     fetchMock.resetMocks();
+    mockGameCard.mockClear(); // Clear mock before each test
     mockUseSteam.mockReturnValue({
       steamId: null,
       steamUser: null,
@@ -88,8 +100,22 @@ describe('GameLibrary Component', () => {
 
   it('should fetch and display Steam games when steamId and steamUser are in context', async () => {
     const mockSteamGames = [
-      { appID: 730, name: 'Counter-Strike 2', playtimeForever: 12000, imgIconURL: 'csgo.jpg', imgLogoURL: 'csgo_logo.jpg' },
-      { appID: 570, name: 'Dota 2', playtimeForever: 30000, imgIconURL: 'dota2.jpg', imgLogoURL: 'dota2_logo.jpg' },
+      {
+        appID: 730,
+        name: 'Counter-Strike 2',
+        playtimeForever: 12000,
+        imgIconURL: 'csgo.jpg',
+        imgLogoURL: 'csgo_logo.jpg',
+        achievements: { unlocked: 50, total: 167 }
+      },
+      {
+        appID: 570,
+        name: 'Dota 2',
+        playtimeForever: 30000,
+        imgIconURL: 'dota2.jpg',
+        imgLogoURL: 'dota2_logo.jpg',
+        achievements: { unlocked: 10, total: 50 }
+      },
     ];
     fetchMock.mockResponseOnce(JSON.stringify(mockSteamGames));
     const steamId = 'teststeamid123';
@@ -116,13 +142,36 @@ describe('GameLibrary Component', () => {
     });
 
     // Check if Steam games are displayed
-    expect(await screen.findByText('Counter-Strike 2')).toBeInTheDocument();
-    expect(await screen.findByText('Dota 2')).toBeInTheDocument();
+    // The GameCard mock now includes achievement text, so we can check for that pattern
+    expect(await screen.findByText(/Counter-Strike 2 - Achievements: 50\/167/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Dota 2 - Achievements: 10\/50/i)).toBeInTheDocument();
     expect(screen.getByText('Local Game 1')).toBeInTheDocument(); // Local games still present
 
     const steamPlatformButton = await screen.findByRole('button', { name: /Steam/ });
     expect(steamPlatformButton).toBeInTheDocument();
     expect(within(steamPlatformButton).getByText('2')).toBeInTheDocument(); // Count for Steam games
+
+    // Example assertion (add this inside the test case):
+    await waitFor(() => { // Ensure games are processed
+      expect(mockGameCard).toHaveBeenCalledWith(
+        expect.objectContaining({
+          game: expect.objectContaining({
+            id: 'steam-730', // ID after transformation by steamGameToGameType
+            title: 'Counter-Strike 2',
+            achievements: { unlocked: 50, total: 167 },
+          }),
+        })
+      );
+      expect(mockGameCard).toHaveBeenCalledWith(
+        expect.objectContaining({
+          game: expect.objectContaining({
+            id: 'steam-570', // ID after transformation by steamGameToGameType
+            title: 'Dota 2',
+            achievements: { unlocked: 10, total: 50 },
+          }),
+        })
+      );
+    });
   });
 
   it('should display an error message if fetching Steam games fails when steamId is in context', async () => {
