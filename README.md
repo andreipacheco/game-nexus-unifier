@@ -36,6 +36,33 @@ npm i
 npm run dev
 ```
 
+## Server Configuration & Database
+
+The backend server, located in the `server/` directory, requires additional configuration, especially for database connectivity.
+
+### MongoDB Integration
+
+This application uses MongoDB to cache Steam game data retrieved from the Steam API. This caching mechanism significantly improves performance for subsequent requests for the same user's game data, reducing load times and minimizing redundant API calls to Steam.
+
+**Required Environment Variable:**
+
+*   `MONGODB_URI`: Your MongoDB connection string.
+
+This variable **must** be defined in a `.env` file located in the `server/` directory (i.e., `server/.env`).
+
+Example `server/.env` file:
+```
+MONGODB_URI=mongodb://localhost:27017/your_database_name
+STEAM_API_KEY=your_steam_api_key_here
+```
+(Note: Ensure `STEAM_API_KEY` is also present if you are working with Steam API features.)
+
+**Benefits of Caching:**
+*   **Faster Response Times:** Game data for previously accessed users is served quickly from the cache.
+*   **Reduced API Rate Limiting:** Minimizes direct calls to the external Steam API, helping to stay within rate limits.
+*   **Lower Server Load:** Decreases processing load on the server by avoiding repeated data fetching and processing.
+
+
 **Edit a file directly in GitHub**
 
 - Navigate to the desired file(s).
@@ -59,6 +86,9 @@ This project is built with:
 - React
 - shadcn-ui
 - Tailwind CSS
+- Node.js (for the backend server)
+- Express.js (for the backend server)
+- MongoDB (for caching Steam game data)
 
 ## How can I deploy this project?
 
