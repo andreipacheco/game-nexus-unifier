@@ -31,33 +31,79 @@ function configurePassport(passportInstance) {
 
         try {
             let user = await User.findOne({ steamId: profile.id });
+            let emailToUse;
+
+            // Steam profiles usually don't provide verified emails.
+            // We'll use a placeholder if no email is found in the profile.
+            // The 'profile.emails' part is speculative for Steam but good practice.
+            if (profile.emails && profile.emails[0] && profile.emails[0].value) {
+                emailToUse = profile.emails[0].value.toLowerCase();
+            } else {
+                emailToUse = `${profile.id}@steamuser.placeholder.email`;
+            }
+
+            const steamAvatar = (profile.photos && profile.photos.length > 0 ? profile.photos[profile.photos.length - 1].value : null) || (profile._json && profile._json.avatarfull);
 
             if (user) {
-                // User found, update their information
+                // User found by steamId, update details
                 user.personaName = profile.displayName;
-                // passport-steam provides photos in an array, last one is usually largest/full
-                user.avatar = profile.photos && profile.photos.length > 0 ? profile.photos[profile.photos.length - 1].value : user.avatar;
-                // profile._json might contain more details like profileurl
-                if (profile._json && profile._json.profileurl) {
-                    user.profileUrl = profile._json.profileurl;
-                }
-                // lastSteamSync or similar fields could be updated here
+                user.avatar = steamAvatar || user.avatar; // Use new avatar if available
+                user.profileUrl = (profile._json && profile._json.profileurl) || user.profileUrl;
                 user.lastLoginAt = new Date();
+
+                // If the user somehow has no email or has a placeholder, set the new one.
+                // Only overwrite a placeholder email if the new emailToUse is not also a placeholder.
+                // Or if user had no email at all, set it.
+                if (!user.email || user.email.endsWith('@steamuser.placeholder.email')) {
+                    if (emailToUse && !emailToUse.endsWith('@steamuser.placeholder.email')) { // if new email is real
+                        user.email = emailToUse;
+                        logger.info(`Updated email for Steam user ${user.steamId} to ${emailToUse} (from profile).`);
+                    } else if (!user.email) { // user had no email, set placeholder or (rarely) real one
+                        user.email = emailToUse;
+                        logger.info(`Set initial email for Steam user ${user.steamId} to ${emailToUse}.`);
+                    }
+                }
+                // Ensure name field is also populated if it was missing
+                if (!user.name && profile.displayName) {
+                    user.name = profile.displayName;
+                }
+
                 await user.save();
                 logger.info(`Steam user updated via Passport: ${user.steamId} - ${user.personaName}`);
                 return done(null, user);
             } else {
-                // New user, create them
+                // No user found by steamId.
+                // Try to find by email ONLY if Steam provided a real email (very rare).
+                // Avoid searching by placeholder email to prevent accidental linking.
+                if (emailToUse && !emailToUse.endsWith('@steamuser.placeholder.email')) {
+                    user = await User.findOne({ email: emailToUse });
+                    if (user) {
+                        // User found by real email. Link Steam ID and update details.
+                        user.steamId = profile.id;
+                        user.personaName = profile.displayName;
+                        user.avatar = steamAvatar || user.avatar;
+                        user.profileUrl = (profile._json && profile._json.profileurl) || user.profileUrl;
+                        user.name = user.name || profile.displayName; // Keep existing name or update from Steam
+                        user.lastLoginAt = new Date();
+                        await user.save();
+                        logger.info(`Linked Steam ID ${profile.id} to existing user ${user.email}.`);
+                        return done(null, user);
+                    }
+                }
+
+                // Still no user, or email was a placeholder: create a new user.
                 const newUser = new User({
                     steamId: profile.id,
+                    email: emailToUse, // Will be placeholder if Steam didn't provide one
                     personaName: profile.displayName,
-                    avatar: profile.photos && profile.photos.length > 0 ? profile.photos[profile.photos.length - 1].value : null,
-                    profileUrl: profile._json && profile._json.profileurl ? profile._json.profileurl : null,
-                    // other fields can be added as needed
+                    avatar: steamAvatar,
+                    profileUrl: (profile._json && profile._json.profileurl) || null,
+                    name: profile.displayName, // Set 'name' field from Steam's displayName
+                    lastLoginAt: new Date(),
+                    // Password will be undefined; user can set it later if they wish
                 });
-                newUser.lastLoginAt = new Date();
                 await newUser.save();
-                logger.info(`New Steam user created via Passport: ${newUser.steamId} - ${newUser.personaName}`);
+                logger.info(`New Steam user created via Passport: ${newUser.steamId} - ${newUser.personaName}, Email: ${newUser.email}`);
                 return done(null, newUser);
             }
         } catch (err) {
