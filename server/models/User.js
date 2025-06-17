@@ -17,6 +17,12 @@ const UserSchema = new mongoose.Schema({
   profileUrl: {
     type: String, // URL to the Steam profile
   },
+  lastLoginAt: {
+    type: Date,
+  },
+  lastLogoutAt: {
+    type: Date,
+  },
   // You might want to add other fields from Steam user summary, e.g.,
   // realName: String,
   // countryCode: String,

@@ -34,19 +34,28 @@ router.get('/steam/return',
 );
 
 // Logout route
-router.get('/logout', (req, res, next) => {
+router.get('/logout', async (req, res, next) => { // Made async
+    if (req.user) {
+        try {
+            // Assuming req.user is the Mongoose User document from deserializeUser.
+            req.user.lastLogoutAt = new Date();
+            await req.user.save();
+            logger.info(`Updated lastLogoutAt for user: ${req.user.steamId}`);
+        } catch (dbError) {
+            logger.error('Failed to update lastLogoutAt on logout', { userId: req.user.id, error: dbError });
+            // This error should not prevent logout. Just log it.
+        }
+    }
+
     req.logout(function(err) {
         if (err) {
             logger.error('Logout error', { error: err });
             // Redirect to an error page or send an error response
-            // For now, passing to next error handler, or redirect to frontend error page.
             return res.redirect(`${process.env.APP_BASE_URL}/login?error=logout_failed`);
         }
         req.session.destroy(err => {
             if (err) {
                 logger.error('Session destruction error during logout', { error: err });
-                // Even if session destruction fails, try to clear cookie and redirect.
-                // Or, pass to an error handler.
                 res.clearCookie('connect.sid'); // Default session cookie name
                 return res.redirect(`${process.env.APP_BASE_URL}/login?error=session_destroy_failed`);
             }
