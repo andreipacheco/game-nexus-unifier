@@ -17,8 +17,17 @@ jest.mock('@/components/ui/sonner', () => ({
   },
 }));
 
+// Mock useNavigate
+const mockNavigate = jest.fn();
+jest.mock('react-router-dom', () => ({
+  ...jest.requireActual('react-router-dom'),
+  useNavigate: () => mockNavigate,
+}));
+
 // Mock useAuth hook
+const mockLogout = jest.fn();
 const mockUseAuth = jest.fn();
+
 jest.mock('@/contexts/AuthContext', () => ({
   ...jest.requireActual('@/contexts/AuthContext'),
   useAuth: () => mockUseAuth(),
@@ -28,7 +37,9 @@ jest.mock('@/contexts/AuthContext', () => ({
 describe('ConfigurationPage', () => {
   beforeEach(() => {
     fetchMock.resetMocks();
-    jest.clearAllMocks(); // Clear toast mocks and useAuth mocks
+    jest.clearAllMocks();
+    mockNavigate.mockClear(); // Clear navigate mock specifically
+    mockLogout.mockClear(); // Clear logout mock
 
     // Setup default mock for useAuth, can be overridden in tests
     mockUseAuth.mockReturnValue({
@@ -36,7 +47,7 @@ describe('ConfigurationPage', () => {
       user: { id: 'test-user-id', email: 'test@example.com' },
       isLoading: false,
       fetchUser: jest.fn(),
-      logout: jest.fn(),
+      logout: mockLogout, // Use the specific mockLogout here
     });
   });
 
@@ -53,13 +64,18 @@ describe('ConfigurationPage', () => {
 
   it('renders the change password form correctly', () => {
     renderWithProviders(<ConfigurationPage />);
+    // Change Password form
     expect(screen.getByLabelText(/current password/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/new password/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/confirm new password/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /change password/i })).toBeInTheDocument();
+    // Logout button
+    expect(screen.getByRole('button', { name: /logout/i })).toBeInTheDocument();
   });
 
-  it('shows validation error if new passwords do not match', async () => {
+  // --- Password Change Tests ---
+  describe('Password Change', () => {
+    it('shows validation error if new passwords do not match', async () => {
     renderWithProviders(<ConfigurationPage />);
     const newPasswordInput = screen.getByLabelText(/new password/i);
     const confirmPasswordInput = screen.getByLabelText(/confirm new password/i);
@@ -161,6 +177,42 @@ describe('ConfigurationPage', () => {
     await waitFor(() => {
         expect(screen.getByText('An unexpected error occurred. Please try again.')).toBeVisible();
         expect(require('@/components/ui/sonner').toast.error).toHaveBeenCalledWith('An unexpected error occurred. Please try again.');
+    });
+  });
+});
+
+  // --- Logout Tests ---
+  describe('Logout', () => {
+    it('renders the logout button', () => {
+      renderWithProviders(<ConfigurationPage />);
+      expect(screen.getByRole('button', { name: /logout/i })).toBeInTheDocument();
+    });
+
+    it('calls logout function and navigates to /login on button click', async () => {
+      mockLogout.mockResolvedValueOnce(undefined); // Simulate successful logout from context
+      renderWithProviders(<ConfigurationPage />);
+
+      const logoutButton = screen.getByRole('button', { name: /logout/i });
+      fireEvent.click(logoutButton);
+
+      // Check for loading state (optional, if implemented well)
+      expect(screen.getByRole('button', { name: /logging out.../i })).toBeInTheDocument();
+
+      await waitFor(() => expect(mockLogout).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(require('@/components/ui/sonner').toast.success).toHaveBeenCalledWith('You have been logged out.'));
+      await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/login'));
+    });
+
+    it('shows error toast if logout context function fails', async () => {
+      mockLogout.mockRejectedValueOnce(new Error('Context logout failed'));
+      renderWithProviders(<ConfigurationPage />);
+
+      const logoutButton = screen.getByRole('button', { name: /logout/i });
+      fireEvent.click(logoutButton);
+
+      await waitFor(() => expect(mockLogout).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(require('@/components/ui/sonner').toast.error).toHaveBeenCalledWith('Logout failed. Please try again.'));
+      expect(mockNavigate).not.toHaveBeenCalled(); // Should not navigate if logout fails
     });
   });
 });

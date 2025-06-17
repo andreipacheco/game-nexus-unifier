@@ -1,61 +1,63 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { toast } from '@/components/ui/sonner'; // For toast notifications
+import { Card, CardContent, CardHeader, CardTitle, CardFooter, CardDescription } from '@/components/ui/card';
+import { toast } from '@/components/ui/sonner';
+import { useAuth } from '@/contexts/AuthContext'; // Adjusted path assuming contexts is at src/contexts
 
 const ConfigurationPage: React.FC = () => {
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [passwordChangeError, setPasswordChangeError] = useState<string | null>(null);
+  const [isPasswordChanging, setIsPasswordChanging] = useState(false);
+
+  const { logout } = useAuth();
+  const navigate = useNavigate();
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const validatePasswords = (): boolean => {
+    setPasswordChangeError(null);
     if (!newPassword || !confirmNewPassword) {
-      setError('New password fields cannot be empty.');
+      setPasswordChangeError('New password fields cannot be empty.');
       return false;
     }
     if (newPassword !== confirmNewPassword) {
-      setError('New passwords do not match.');
+      setPasswordChangeError('New passwords do not match.');
       return false;
     }
     if (newPassword.length < 8) {
-      setError('New password must be at least 8 characters long.');
+      setPasswordChangeError('New password must be at least 8 characters long.');
       return false;
     }
-    // Potentially more password strength rules here
-    setError(null);
     return true;
   };
 
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+  const handleChangePasswordSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setError(null);
-
     if (!validatePasswords()) {
       return;
     }
 
-    setIsLoading(true);
+    setIsPasswordChanging(true);
+    setPasswordChangeError(null);
 
     try {
-      // Assuming the API endpoint is /api/user/change-password
-      // And backend is running on port 3001 (adjust if different)
-      const response = await fetch('http://localhost:3001/api/user/change-password', {
+      const response = await fetch('http://localhost:3000/api/user/change-password', { // Updated port
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          // Include Authorization header if your API requires authentication
-          // 'Authorization': `Bearer ${your_auth_token_here}`,
+          // Auth token should be sent via cookie due to credentials: 'include' in AuthContext
         },
         body: JSON.stringify({
-          currentPassword: currentPassword || undefined, // Send undefined if empty
+          currentPassword: currentPassword || undefined,
           newPassword,
         }),
       });
 
-      setIsLoading(false);
+      setIsPasswordChanging(false);
       const data = await response.json();
 
       if (response.ok) {
@@ -64,89 +66,115 @@ const ConfigurationPage: React.FC = () => {
         setNewPassword('');
         setConfirmNewPassword('');
       } else {
-        setError(data.message || 'Failed to change password.');
+        setPasswordChangeError(data.message || 'Failed to change password.');
         toast.error(data.message || 'Failed to change password.');
       }
     } catch (err) {
-      setIsLoading(false);
-      setError('An unexpected error occurred. Please try again.');
+      setIsPasswordChanging(false);
+      setPasswordChangeError('An unexpected error occurred. Please try again.');
       toast.error('An unexpected error occurred. Please try again.');
       console.error('Password change error:', err);
     }
   };
 
+  const handleLogout = async () => {
+    setIsLoggingOut(true);
+    try {
+      await logout(); // Call logout from AuthContext
+      toast.success('You have been logged out.');
+      navigate('/login'); // Redirect to login page
+    } catch (error) {
+      console.error('Logout failed:', error);
+      toast.error('Logout failed. Please try again.');
+    } finally {
+      setIsLoggingOut(false);
+    }
+  };
+
   return (
-    <div style={{
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      padding: '2rem',
-      maxWidth: '500px',
-      margin: '2rem auto',
-      backgroundColor: '#fff',
-      borderRadius: '8px',
-      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)'
-    }}>
-      <h1 style={{ fontSize: '1.75rem', fontWeight: 'bold', marginBottom: '1.5rem', color: '#333' }}>
-        Change Password
-      </h1>
-      <form onSubmit={handleSubmit} style={{ width: '100%' }}>
-        <div style={{ marginBottom: '1rem' }}>
-          <Label htmlFor="currentPassword" style={{ display: 'block', marginBottom: '0.5rem' }}>
-            Current Password (optional, required if you have one)
-          </Label>
-          <Input
-            id="currentPassword"
-            type="password"
-            value={currentPassword}
-            onChange={(e) => setCurrentPassword(e.target.value)}
-            placeholder="Enter your current password"
-            disabled={isLoading}
-          />
-        </div>
-        <div style={{ marginBottom: '1rem' }}>
-          <Label htmlFor="newPassword" style={{ display: 'block', marginBottom: '0.5rem' }}>
-            New Password
-          </Label>
-          <Input
-            id="newPassword"
-            type="password"
-            value={newPassword}
-            onChange={(e) => {
-              setNewPassword(e.target.value);
-              if (error) validatePasswords(); // Re-validate on change if there was an error
-            }}
-            placeholder="Enter your new password (min. 8 characters)"
-            required
-            disabled={isLoading}
-          />
-        </div>
-        <div style={{ marginBottom: '1.5rem' }}>
-          <Label htmlFor="confirmNewPassword" style={{ display: 'block', marginBottom: '0.5rem' }}>
-            Confirm New Password
-          </Label>
-          <Input
-            id="confirmNewPassword"
-            type="password"
-            value={confirmNewPassword}
-            onChange={(e) => {
-              setConfirmNewPassword(e.target.value);
-              if (error) validatePasswords(); // Re-validate on change if there was an error
-            }}
-            placeholder="Confirm your new password"
-            required
-            disabled={isLoading}
-          />
-        </div>
-        {error && (
-          <p style={{ color: 'red', marginBottom: '1rem', textAlign: 'center' }}>
-            {error}
-          </p>
-        )}
-        <Button type="submit" disabled={isLoading} style={{ width: '100%' }}>
-          {isLoading ? 'Changing...' : 'Change Password'}
-        </Button>
-      </form>
+    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100 p-4">
+      <div className="w-full max-w-md space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-2xl font-bold text-center">Change Password</CardTitle>
+            <CardDescription className="text-center">
+              Update your password below.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleChangePasswordSubmit} className="space-y-4">
+              <div>
+                <Label htmlFor="currentPassword">
+                  Current Password (optional, if you have one)
+                </Label>
+                <Input
+                  id="currentPassword"
+                  type="password"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  placeholder="Enter your current password"
+                  disabled={isPasswordChanging}
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label htmlFor="newPassword">New Password</Label>
+                <Input
+                  id="newPassword"
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => {
+                    setNewPassword(e.target.value);
+                    if (passwordChangeError) validatePasswords();
+                  }}
+                  placeholder="Min. 8 characters"
+                  required
+                  disabled={isPasswordChanging}
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label htmlFor="confirmNewPassword">Confirm New Password</Label>
+                <Input
+                  id="confirmNewPassword"
+                  type="password"
+                  value={confirmNewPassword}
+                  onChange={(e) => {
+                    setConfirmNewPassword(e.target.value);
+                    if (passwordChangeError) validatePasswords();
+                  }}
+                  placeholder="Re-enter your new password"
+                  required
+                  disabled={isPasswordChanging}
+                  className="mt-1"
+                />
+              </div>
+              {passwordChangeError && (
+                <p className="text-sm text-red-600 text-center">{passwordChangeError}</p>
+              )}
+              <Button type="submit" disabled={isPasswordChanging} className="w-full">
+                {isPasswordChanging ? 'Changing...' : 'Change Password'}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-2xl font-bold text-center">Account Actions</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Button
+              variant="outline"
+              onClick={handleLogout}
+              disabled={isLoggingOut}
+              className="w-full"
+            >
+              {isLoggingOut ? 'Logging out...' : 'Logout'}
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 };

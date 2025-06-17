@@ -296,12 +296,141 @@ describe('Auth Endpoints', () => {
     });
   });
 
-  // TODO: Adapt Steam tests similarly if time permits, or keep existing mocks for them.
-  // For now, focusing on Google OAuth.
+  describe('Local Email/Password Auth', () => {
+    const userData = {
+      name: 'Test User',
+      email: 'test@example.com',
+      password: 'password123',
+    };
+    const lowercasedEmail = userData.email.toLowerCase();
+
+    describe('POST /auth/register', () => {
+      it('should register a new user successfully and establish a session', async () => {
+        const response = await request(app)
+          .post('/auth/register')
+          .send(userData);
+
+        expect(response.status).toBe(201);
+        expect(response.body.message).toBe('Registration successful. User logged in.');
+        expect(response.body.user.email).toBe(lowercasedEmail);
+        expect(response.body.user.name).toBe(userData.name);
+        expect(response.body.user).not.toHaveProperty('password');
+        expect(response.header['set-cookie']).toBeDefined(); // Session cookie
+        expect(response.header['set-cookie'].some(cookie => cookie.startsWith('connect.sid='))).toBe(true);
+
+        const dbUser = await User.findOne({ email: lowercasedEmail });
+        expect(dbUser).not.toBeNull();
+        expect(dbUser.name).toBe(userData.name);
+        expect(dbUser.password).toBeDefined();
+        expect(dbUser.password).not.toBe(userData.password); // Should be hashed
+      });
+
+      it('should return 409 if email already exists', async () => {
+        await new User({ email: lowercasedEmail, password: 'anotherPassword' }).save();
+        const response = await request(app)
+          .post('/auth/register')
+          .send(userData);
+        expect(response.status).toBe(409);
+        expect(response.body.message).toBe('User already exists with this email.');
+      });
+
+      it('should return 400 for missing email', async () => {
+        const response = await request(app)
+          .post('/auth/register')
+          .send({ name: userData.name, password: userData.password });
+        expect(response.status).toBe(400);
+        expect(response.body.message).toBe('Email and password are required.');
+      });
+
+      it('should return 400 for missing password', async () => {
+        const response = await request(app)
+          .post('/auth/register')
+          .send({ name: userData.name, email: userData.email });
+        expect(response.status).toBe(400);
+        expect(response.body.message).toBe('Email and password are required.');
+      });
+
+      it('should return 400 for short password', async () => {
+        const response = await request(app)
+          .post('/auth/register')
+          .send({ ...userData, password: 'short' });
+        expect(response.status).toBe(400);
+        expect(response.body.message).toBe('Password must be at least 8 characters long.');
+      });
+    });
+
+    describe('POST /auth/login', () => {
+      let agent;
+      beforeEach(async () => {
+        agent = request.agent(app); // Use agent to persist session cookies
+        // Create a user to login with
+        const user = new User(userData); // Password will be hashed by pre-save hook
+        await user.save();
+      });
+
+      it('should login an existing user successfully and establish a session', async () => {
+        const response = await agent
+          .post('/auth/login')
+          .send({ email: userData.email, password: userData.password });
+
+        expect(response.status).toBe(200);
+        expect(response.body.message).toBe('Login successful');
+        expect(response.body.user.email).toBe(lowercasedEmail);
+        expect(response.body.user).not.toHaveProperty('password');
+        expect(response.header['set-cookie']).toBeDefined();
+        expect(response.header['set-cookie'].some(cookie => cookie.startsWith('connect.sid='))).toBe(true);
+
+        // Check if lastLoginAt was updated (optional, but good)
+        const dbUser = await User.findOne({ email: lowercasedEmail });
+        expect(dbUser.lastLoginAt).toBeDefined();
+      });
+
+      it('should return 401 for incorrect password', async () => {
+        const response = await agent
+          .post('/auth/login')
+          .send({ email: userData.email, password: 'wrongPassword' });
+        expect(response.status).toBe(401);
+        expect(response.body.message).toBe('Invalid email or password.');
+      });
+
+      it('should return 401 for non-existent email', async () => {
+        const response = await agent
+          .post('/auth/login')
+          .send({ email: 'nonexistent@example.com', password: userData.password });
+        expect(response.status).toBe(401);
+        expect(response.body.message).toBe('Invalid email or password.');
+      });
+
+      it('should return 401 for a user with no local password (e.g., OAuth only)', async () => {
+        await User.create({
+          email: 'oauthonly@example.com',
+          name: 'OAuth User',
+          googleId: 'google12345',
+          // no password field
+        });
+        const response = await agent
+          .post('/auth/login')
+          .send({ email: 'oauthonly@example.com', password: 'anypassword' });
+        expect(response.status).toBe(401);
+        expect(response.body.message).toBe('Account exists but has no local password. Try OAuth or set a password.');
+      });
+    });
+  });
+
+  // TODO: Adapt Steam tests similarly if time permits.
 
   describe('GET /auth/logout', () => {
     it('should log out the user and redirect to home', async () => {
+      // For logout, agent needs to be "logged in" first.
+      // We can achieve this by first registering/logging in a user with the agent.
       const agent = request.agent(app);
+      await agent.post('/auth/register').send({
+        name: 'Logout Test User',
+        email: 'logout@example.com',
+        password: 'password123'
+      });
+      // Now agent has a session.
+
       // Simulate a login first (simplified - assuming a session can be established)
       // For a real test of logout, you'd typically perform a login operation with the agent first.
       // Here, we'll rely on the fact that if a user *was* logged in, logout clears session.

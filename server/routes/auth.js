@@ -1,11 +1,85 @@
 const express = require('express');
 const router = express.Router();
-const passport = require('passport'); // Require Passport
-const logger = require('../config/logger'); // Import logger
-// User model will be used by passportConfig, not directly here for login/callback
+const passport = require('passport');
+const User = require('../models/User'); // Import User model
+const logger = require('../config/logger');
 
 // Note: The initializeAuthSteamAPI and related 'steam' variable are removed
 // as passport-steam strategy in passportConfig.js handles Steam API interaction.
+
+// --- Email/Password Authentication Routes ---
+
+// POST /auth/register - User Registration
+router.post('/register', async (req, res, next) => {
+  const { name, email, password } = req.body;
+
+  if (!email || !password) {
+    return res.status(400).json({ message: 'Email and password are required.' });
+  }
+  if (password.length < 8) {
+    return res.status(400).json({ message: 'Password must be at least 8 characters long.' });
+  }
+
+  try {
+    const lowercasedEmail = email.toLowerCase();
+    const existingUser = await User.findOne({ email: lowercasedEmail });
+    if (existingUser) {
+      return res.status(409).json({ message: 'User already exists with this email.' });
+    }
+
+    const newUser = new User({
+      name: name || '', // Default to empty string if name is not provided
+      email: lowercasedEmail,
+      password: password, // Password will be hashed by pre-save hook in User model
+    });
+
+    await newUser.save();
+    logger.info(`New user registered: ${newUser.email}, ID: ${newUser._id}`);
+
+    // Log in the user automatically after registration
+    req.login(newUser, (err) => {
+      if (err) {
+        logger.error('Error logging in user after registration:', { userId: newUser._id, error: err });
+        return next(err); // Pass error to error handler
+      }
+      logger.info(`User ${newUser.email} logged in successfully after registration.`);
+      const { password, ...userData } = newUser.toObject(); // Exclude password
+      return res.status(201).json({ message: 'Registration successful. User logged in.', user: userData });
+    });
+
+  } catch (error) {
+    logger.error('Error during user registration:', { error: error.message, stack: error.stack });
+    // Check for duplicate key error (though findOne should catch it, this is a fallback)
+    if (error.code === 11000) { // MongoDB duplicate key error
+        return res.status(409).json({ message: 'User already exists with this email.' });
+    }
+    return res.status(500).json({ message: 'Server error during registration.' });
+  }
+});
+
+// POST /auth/login - User Login
+router.post('/login', (req, res, next) => {
+  passport.authenticate('local', (err, user, info) => {
+    if (err) {
+      logger.error('Error during local authentication:', { error: err });
+      return next(err);
+    }
+    if (!user) {
+      logger.warn('Local authentication failed:', { message: info ? info.message : 'No user object' });
+      return res.status(401).json({ message: info && info.message ? info.message : 'Login failed. Invalid credentials.' });
+    }
+    req.login(user, (err) => {
+      if (err) {
+        logger.error('Error logging in user after local authentication:', { userId: user._id, error: err });
+        return next(err);
+      }
+      logger.info(`User ${user.email} logged in successfully via local strategy.`);
+      const { password, ...userData } = user.toObject(); // Exclude password
+      return res.json({ message: 'Login successful', user: userData });
+    });
+  })(req, res, next);
+});
+
 
 // --- Google Authentication Routes ---
 

@@ -5,11 +5,12 @@
 // For now, I will use CommonJS `require` to match `server.js` context and avoid new ESM issues.
 
 const passport = require('passport');
-const GoogleStrategy = require('passport-google-oauth20').Strategy; // Added GoogleStrategy
-// passport-steam strategy is typically exported as `Strategy`
+const LocalStrategy = require('passport-local').Strategy;
+const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const SteamStrategy = require('passport-steam').Strategy;
-const User = require('../models/User'); // Adjust path if User.js is not in ../models/
-const logger = require('./logger'); // Adjust path if logger.js is not in ./
+const User = require('../models/User');
+const bcrypt = require('bcrypt'); // For password comparison
+const logger = require('./logger');
 
 function configurePassport(passportInstance) {
     // Steam Strategy Configuration
@@ -137,6 +138,43 @@ function configurePassport(passportInstance) {
         }));
     } // End of GoogleStrategy configuration block
 
+    // Local Strategy (Email/Password) Configuration
+    passportInstance.use(new LocalStrategy({
+        usernameField: 'email', // Use email as the username field
+        // passReqToCallback: false // Default is false, set true if you need req object in verify callback
+    }, async (email, password, done) => {
+        try {
+            const lowercasedEmail = email.toLowerCase();
+            const user = await User.findOne({ email: lowercasedEmail });
+
+            if (!user) {
+                logger.debug(`LocalStrategy: No user found for email: ${lowercasedEmail}`);
+                return done(null, false, { message: 'Invalid email or password.' });
+            }
+
+            // Check if user has a local password set (might be a Google/Steam only user initially)
+            if (!user.password) {
+                logger.debug(`LocalStrategy: User ${lowercasedEmail} has no local password set (possibly OAuth only account).`);
+                return done(null, false, { message: 'Account exists but has no local password. Try OAuth or set a password.' });
+            }
+
+            const isMatch = await bcrypt.compare(password, user.password);
+            if (isMatch) {
+                logger.info(`LocalStrategy: User ${lowercasedEmail} authenticated successfully.`);
+                user.lastLoginAt = new Date(); // Update last login time
+                await user.save(); // Save the updated lastLoginAt
+                return done(null, user);
+            } else {
+                logger.debug(`LocalStrategy: Invalid password for user: ${lowercasedEmail}`);
+                return done(null, false, { message: 'Invalid email or password.' });
+            }
+        } catch (err) {
+            logger.error('Error in LocalStrategy verify callback', { error: err });
+            return done(err);
+        }
+    }));
+
+
     passportInstance.serializeUser((user, done) => {
         // user object here is what was returned from the strategy's done(null, user)
         done(null, user.id); // Store MongoDB _id in session
@@ -153,7 +191,7 @@ function configurePassport(passportInstance) {
         }
     });
 
-            logger.info('Passport configured with SteamStrategy and GoogleStrategy (if env vars are set).');
+            logger.info('Passport configured with Local, Steam, and Google Strategies (if env vars are set for OAuth).');
 }
 
 module.exports = configurePassport; // Export the function
