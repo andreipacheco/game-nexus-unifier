@@ -1,15 +1,16 @@
 
-import { useState, useEffect, useCallback } from "react"; // Added useCallback
-import { useLocation, useNavigate } from "react-router-dom"; // For URL param handling
+import { useState, useEffect, useCallback } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useSteam } from "@/contexts/SteamContext";
-import { useGog } from "@/contexts/GogContext"; // Import useGog
+import { useGog } from "@/contexts/GogContext";
+import { useXbox } from "@/contexts/XboxContext"; // Import useXbox
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Plug, CheckCircle, XCircle, ExternalLink, Settings } from "lucide-react";
+import { Plug, CheckCircle, XCircle, ExternalLink, Settings, Gamepad2 } from "lucide-react"; // Import Gamepad2
 
 interface Platform {
   id: string;
@@ -45,15 +46,14 @@ const platforms: Platform[] = [
   },
   {
     id: 'xbox',
-    name: 'Xbox (Microsoft)',
-    description: 'Connect to Xbox Live for game library and achievement data.',
+    name: 'Xbox (xbl.io)',
+    description: 'Connect via xbl.io using your Xbox User ID (XUID) to load your game library and achievements.',
     connected: false,
-    apiDocUrl: 'https://docs.microsoft.com/en-us/gaming/xbox-live/api-ref/',
-    requiredCredentials: ['Client ID', 'Client Secret', 'Tenant ID'],
-    icon: '🟢',
+    apiDocUrl: 'https://xbl.io/console', // Link to xbl.io console or docs
+    requiredCredentials: ['Xbox User ID (XUID)'], // Updated credentials
+    icon: '🟢', // Placeholder, will use Gamepad2 icon in render
     color: 'bg-green-600'
   },
-  // Other platforms remain the same
   {
     id: 'gog',
     name: 'GOG Galaxy',
@@ -88,7 +88,8 @@ export const PlatformConnections = () => {
   const [credentials, setCredentials] = useState<Record<string, string>>({});
   const [platformsState, setPlatformsState] = useState<Platform[]>(platforms);
   const [localSteamError, setLocalSteamError] = useState<string | null>(null);
-  const [gogIdInput, setGogIdInput] = useState<string>(""); // For GOG ID input
+  const [gogIdInput, setGogIdInput] = useState<string>("");
+  const [xuidInput, setXuidInput] = useState<string>(""); // For XUID input
 
   // GOG Context
   const {
@@ -99,6 +100,13 @@ export const PlatformConnections = () => {
     gogUserError
   } = useGog();
 
+  // Xbox Context
+  const {
+    xboxGames,
+    fetchXboxGames,
+    isLoading: isLoadingXbox,
+    error: errorXbox
+  } = useXbox();
 
   // Effect to handle Steam OpenID callback
   useEffect(() => {
@@ -143,12 +151,16 @@ export const PlatformConnections = () => {
           return { ...p, connected: isAuthenticated };
         }
         if (p.id === 'gog') {
-          return { ...p, connected: !!gogUserId }; // Update GOG connected status
+          return { ...p, connected: !!gogUserId };
+        }
+        if (p.id === 'xbox') {
+          // Xbox is connected if there are games and no error
+          return { ...p, connected: xboxGames.length > 0 && !errorXbox };
         }
         return p;
       })
     );
-  }, [isAuthenticated, gogUserId]); // Add gogUserId as a dependency
+  }, [isAuthenticated, gogUserId, xboxGames, errorXbox]); // Add Xbox dependencies
 
 
   const handleSteamAuthRedirect = () => {
@@ -212,21 +224,26 @@ export const PlatformConnections = () => {
         {platformsState.map((platform) => {
           const isSteam = platform.id === 'steam';
           const isGog = platform.id === 'gog';
+          const isXbox = platform.id === 'xbox';
 
           // Determine connected status
-          let isPlatformConnected = platform.connected;
+          let isPlatformConnected = platform.connected; // Uses the derived value from useEffect
           if (isSteam) {
             isPlatformConnected = isAuthenticated;
           } else if (isGog) {
             isPlatformConnected = !!gogUserId && !isLoadingGogUserId;
+          } else if (isXbox) {
+            isPlatformConnected = xboxGames.length > 0 && !isLoadingXbox && !errorXbox;
           }
+
+          const platformIcon = isXbox ? <Gamepad2 className="h-6 w-6" /> : <span className="text-2xl">{platform.icon}</span>;
 
           return (
             <Card key={platform.id} className="relative">
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-3">
-                    <div className="text-2xl">{platform.icon}</div>
+                    {platformIcon}
                     <div>
                       <CardTitle className="flex items-center space-x-2">
                         <span>{platform.name}</span>
@@ -247,6 +264,8 @@ export const PlatformConnections = () => {
                     : isSteam && isContextLoadingSteamProfile && !contextSteamUser ? 'Verifying Steam connection...'
                     : isGog && gogUserId && !isLoadingGogUserId ? `Connected with GOG User ID: ${gogUserId}. `
                     : isGog && isLoadingGogUserId ? 'Verifying GOG connection...'
+                    : isXbox && isPlatformConnected ? `Xbox Connected (${xboxGames.length} games loaded). `
+                    : isXbox && isLoadingXbox ? 'Loading Xbox games...'
                     : platform.description}
                   {isSteam && contextSteamUser && (
                     <a href={contextSteamUser.profileUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline ml-1">View Profile</a>
@@ -258,11 +277,13 @@ export const PlatformConnections = () => {
                 {(isGog && gogUserError) && (
                   <p className="text-sm text-red-500 bg-red-100 p-2 rounded mt-1">{gogUserError}</p>
                 )}
+                {(isXbox && errorXbox) && (
+                  <p className="text-sm text-red-500 bg-red-100 p-2 rounded mt-1">{errorXbox}</p>
+                )}
               </CardHeader>
               
               <CardContent className="space-y-4">
                 {isSteam && (
-                  // Steam UI (existing)
                   <div className="flex flex-col sm:flex-row gap-2">
                     {isAuthenticated && contextSteamUser ? (
                        <div className="flex-1 space-y-2 text-center">
@@ -323,8 +344,65 @@ export const PlatformConnections = () => {
                   </div>
                 )}
 
-                {/* UI for other platforms (non-Steam, non-GOG) */}
-                {!isSteam && !isGog && (
+                {isXbox && (
+                  <div className="space-y-3">
+                    {isPlatformConnected ? (
+                       <div className="flex flex-col items-center space-y-2">
+                        <p className="text-sm text-green-600">
+                          Xbox Connected ({xboxGames.length} games loaded).
+                        </p>
+                        {/* Optionally, add a disconnect button or allow changing XUID */}
+                        {/* For now, to re-fetch or change XUID, user can type new XUID and click load */}
+                         <Label htmlFor="xuidInput" className="sr-only">Xbox User ID (XUID)</Label>
+                         <Input
+                            id="xuidInput"
+                            type="text"
+                            placeholder="Enter new XUID to update"
+                            value={xuidInput}
+                            onChange={(e) => setXuidInput(e.target.value)}
+                            className="mt-1"
+                            disabled={isLoadingXbox}
+                          />
+                          <Button
+                            onClick={() => fetchXboxGames(xuidInput)}
+                            className="w-full"
+                            disabled={isLoadingXbox || !xuidInput.trim()}
+                          >
+                            {isLoadingXbox ? 'Loading Games...' : 'Update/Reload Xbox Games'}
+                          </Button>
+                       </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <div>
+                          <Label htmlFor="xuidInput">Xbox User ID (XUID)</Label>
+                          <Input
+                            id="xuidInput"
+                            type="text"
+                            placeholder="Enter your XUID"
+                            value={xuidInput}
+                            onChange={(e) => setXuidInput(e.target.value)}
+                            className="mt-1"
+                            disabled={isLoadingXbox}
+                          />
+                          <p className="text-xs text-muted-foreground mt-1">
+                            You can find your XUID using online tools (e.g., search "find my XUID").
+                          </p>
+                        </div>
+                        <Button
+                          onClick={() => fetchXboxGames(xuidInput)}
+                          className="w-full"
+                          disabled={isLoadingXbox || !xuidInput.trim()}
+                        >
+                          <Plug className="h-4 w-4 mr-2" />
+                          {isLoadingXbox ? 'Loading Xbox Games...' : 'Load Xbox Games'}
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* UI for other platforms (non-Steam, non-GOG, non-Xbox) */}
+                {!isSteam && !isGog && !isXbox && (
                   <>
                     <div>
                       <h4 className="text-sm font-medium mb-2">Required Credentials:</h4>
@@ -411,18 +489,19 @@ export const PlatformConnections = () => {
             {platformsState.filter(p => {
               if (p.id === 'steam') return isAuthenticated;
               if (p.id === 'gog') return !!gogUserId;
+              if (p.id === 'xbox') return xboxGames.length > 0 && !errorXbox;
               return p.connected;
             }).map((platform) => (
               <div key={platform.id} className="space-y-2">
                 <div className="flex items-center space-x-2">
-                  <div className="text-lg">{platform.icon}</div>
+                  {platform.id === 'xbox' ? <Gamepad2 className="h-5 w-5" /> : <div className="text-lg">{platform.icon}</div>}
                   <span className="font-medium">{platform.name}</span>
                 </div>
                 <div className="text-sm text-muted-foreground space-y-1">
                   <div>✓ Game Library</div>
-                  <div>✓ Playtime Data</div>
+                  {/* <div>✓ Playtime Data</div> Playtime might not be available for Xbox via this API */}
                   <div>✓ Achievements</div>
-                  <div>✓ Last Played</div> {/* Note: GOG API might not provide all these accurately */}
+                  {/* <div>✓ Last Played</div> Last Played might not be available */}
                 </div>
                 {platform.id === 'steam' && contextSteamUser && isAuthenticated && (
                   <div className="text-xs p-2 bg-blue-50 rounded border border-blue-200">
@@ -435,11 +514,18 @@ export const PlatformConnections = () => {
                     <p className="font-medium">GOG User ID: {gogUserId}</p>
                   </div>
                 )}
+                {platform.id === 'xbox' && xboxGames.length > 0 && !errorXbox && (
+                  <div className="text-xs p-2 bg-green-50 rounded border border-green-200">
+                    <p className="font-medium">Xbox Games: {xboxGames.length}</p>
+                    {/* Display XUID if it were stored, for now, it's in xuidInput if user typed it */}
+                  </div>
+                )}
               </div>
             ))}
              {platformsState.filter(p => {
                if (p.id === 'steam') return !isAuthenticated;
                if (p.id === 'gog') return !gogUserId;
+               if (p.id === 'xbox') return !(xboxGames.length > 0 && !errorXbox);
                return !p.connected;
              }).length === platformsState.length && (
               <p className="text-muted-foreground col-span-full">No platforms connected yet.</p>

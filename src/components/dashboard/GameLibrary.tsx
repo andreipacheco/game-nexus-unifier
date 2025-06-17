@@ -40,8 +40,10 @@ interface GameLibraryProps {
   // steamId?: string; // Steam ID will now come from context
 }
 
-import { useSteam } from "@/contexts/SteamContext"; // Import useSteam
-import { useGog } from "@/contexts/GogContext"; // Import useGog
+import { useSteam } from "@/contexts/SteamContext";
+import { useGog } from "@/contexts/GogContext";
+import { useXbox } from "@/contexts/XboxContext"; // Import useXbox
+import type { XboxGame } from "@/contexts/XboxContext"; // Import XboxGame type
 
 // Helper to convert SteamGame to Game for consistent display, or GameCard could be adapted
 const steamGameToGameType = (steamGame: SteamGame): Game | null => {
@@ -119,8 +121,9 @@ const gogGameToGameType = (gogGame: GogGame): Game | null => {
 
 
 export const GameLibrary = ({ games, selectedPlatform, onPlatformChange }: GameLibraryProps) => {
-  const { steamId, steamUser } = useSteam(); // Get steamId and steamUser from context
-  const { gogUserId } = useGog(); // Get gogUserId from GogContext
+  const { steamId, steamUser } = useSteam();
+  const { gogUserId } = useGog();
+  const { xboxGames: xboxGamesFromContext, isLoading: isLoadingXbox, error: errorXbox } = useXbox(); // Get Xbox data
 
   const [searchTerm, setSearchTerm] = useState("");
   const [steamGames, setSteamGames] = useState<SteamGame[]>([]);
@@ -131,6 +134,8 @@ export const GameLibrary = ({ games, selectedPlatform, onPlatformChange }: GameL
   const [gogGames, setGogGames] = useState<GogGame[]>([]);
   const [isLoadingGogGames, setIsLoadingGogGames] = useState<boolean>(false);
   const [gogGamesError, setGogGamesError] = useState<string | null>(null);
+
+  // No local state for xboxGamesData needed, will map directly from xboxGamesFromContext
 
   useEffect(() => {
     if (steamId) {
@@ -193,13 +198,42 @@ export const GameLibrary = ({ games, selectedPlatform, onPlatformChange }: GameL
     }
   }, [gogUserId]); // Dependency is now the gogUserId from context
 
+// Helper to convert XboxGame to Game for consistent display
+const mapXboxGameToGenericGame = (xboxGame: XboxGame): Game | null => {
+  if (!xboxGame || !xboxGame.titleId) {
+    console.warn('Skipping Xbox game with missing or invalid titleId:', xboxGame);
+    return null;
+  }
+
+  const gameTitle = xboxGame.name || 'Unknown Xbox Game';
+
+  return {
+    id: `xbox-${xboxGame.titleId}`, // Unique ID for React keys
+    title: gameTitle,
+    platform: 'xbox',
+    coverImage: xboxGame.displayImage || '/placeholder.svg', // Ensure placeholder.svg is in public
+    playtime: 0, // Playtime not available from this Xbox API
+    lastPlayed: xboxGame.lastUpdated || new Date(0).toISOString(), // Use lastUpdated from API, or epoch
+    achievements: {
+      unlocked: xboxGame.achievements.currentAchievements,
+      total: xboxGame.achievements.totalAchievements,
+      currentGamerscore: xboxGame.achievements.currentGamerscore,
+      totalGamerscore: xboxGame.achievements.totalGamerscore,
+    },
+    status: 'owned', // Assume 'owned', can be 'not_installed' if preferred
+    genre: ['Unknown Genre'], // Xbox API (titles) doesn't provide genre
+    releaseYear: 0, // Xbox API (titles) doesn't provide release year
+  };
+};
+
   const allGames = [
     ...games,
-    ...(steamGames.map(steamGameToGameType).filter(game => game !== null) as Game[]),
-    ...(gogGames.map(gogGameToGameType).filter(game => game !== null) as Game[])
+    ...(steamGames.map(steamGameToGameType).filter(Boolean) as Game[]),
+    ...(gogGames.map(gogGameToGameType).filter(Boolean) as Game[]),
+    ...(xboxGamesFromContext.map(mapXboxGameToGenericGame).filter(Boolean) as Game[])
   ];
 
-  const currentPlatformInfo: PlatformInfo = { // Add steam to platformInfo if not already there for filtering
+  const currentPlatformInfo: PlatformInfo = {
     ...platformInfo,
     steam: { name: 'Steam', color: '#1b2838', icon: () => <Download /> } // Example, adjust as needed
   };
@@ -238,12 +272,24 @@ export const GameLibrary = ({ games, selectedPlatform, onPlatformChange }: GameL
       name: info.name,
       count: allGames.filter(game => game.platform === key).length
     }))
-  ].filter(f =>
-    f.count > 0 ||
-    f.key === 'all' ||
-    (f.key === 'steam' && steamId && steamUser) ||
-    (f.key === 'gog' && gogUserId) // Show GOG filter if gogUserId from context is present
+  ].filter(f => {
+      if (f.key === 'all') return true;
+      if (f.count > 0) return true;
+      // Show filter if the user is connected to the platform, even if count is 0 initially
+      if (f.key === 'steam' && steamId && steamUser) return true;
+      if (f.key === 'gog' && gogUserId) return true;
+      if (f.key === 'xbox' && xboxGamesFromContext.length > 0) return true; // Show if connected, even if 0 games after filter
+      // Or, more simply, always show if platform is in platformInfo and user is "connected"
+      // For Xbox, "connected" means xboxGamesFromContext exists and no error, handled by context
+      if (f.key === 'xbox' && !errorXbox) return true; // Show if no error, implies an attempt was made or is possible
+      return false;
+    }
   );
+ // Simplified filter display logic: always show if platform is known, count will reflect games
+ // The filter for platformFilters to only show if count > 0 or 'all' or connected is fine.
+ // Let's ensure Xbox filter shows up if context indicates a connection attempt (even if 0 games)
+ // The existing filter logic is: platformFilters.filter(f => f.count > 0 || f.key === 'all' || (isConnectedToPlatform_logic_here))
+ // For Xbox, isConnected might mean xboxGamesFromContext is populated, or errorXbox is null after a fetch.
 
   return (
     <div className="space-y-6">
@@ -327,20 +373,48 @@ export const GameLibrary = ({ games, selectedPlatform, onPlatformChange }: GameL
         </Card>
       )}
 
+      {/* Xbox Games Loading State */}
+      {isLoadingXbox && (
+        <Card>
+          <CardContent className="flex items-center justify-center py-12">
+            <Loader2 className="h-8 w-8 animate-spin text-primary mr-3" />
+            <p className="text-muted-foreground">Loading Xbox games...</p>
+          </CardContent>
+        </Card>
+      )}
+      {/* Xbox Games Error State */}
+      {errorXbox && !isLoadingXbox && (
+        <Card className="border-destructive">
+          <CardHeader>
+            <CardTitle className="flex items-center text-destructive">
+              <AlertTriangle className="h-5 w-5 mr-2" />
+              Error Loading Xbox Games
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-destructive">{errorXbox}</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              Could not fetch your Xbox games. Ensure your XUID is correct and your profile privacy settings allow access.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         {filteredGames.map((game) => (
           <GameCard key={game.id} game={game} />
         ))}
       </div>
 
-      {filteredGames.length === 0 && !isLoadingSteamGames && !isLoadingGogGames && (
+      {filteredGames.length === 0 && !isLoadingSteamGames && !isLoadingGogGames && !isLoadingXbox && (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
             <Search className="h-12 w-12 text-muted-foreground mb-4" />
             <h3 className="text-lg font-medium mb-2">No games found</h3>
             <p className="text-muted-foreground text-center">
               {selectedPlatform === 'steam' && steamId && !steamGamesError && steamGames.length === 0 ? 'No Steam games to display or library is private.' :
-               selectedPlatform === 'gog' && !gogGamesError && gogGames.length === 0 ? 'No GOG games to display.' : // Basic message for GOG
+               selectedPlatform === 'gog' && gogUserId && !gogGamesError && gogGames.length === 0 ? 'No GOG games to display.' :
+               selectedPlatform === 'xbox' && !errorXbox && xboxGamesFromContext.length === 0 ? 'No Xbox games to display or profile is private.' :
                'Try adjusting your search or platform filter.'}
             </p>
           </CardContent>

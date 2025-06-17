@@ -157,6 +157,12 @@ const gogRoutes = require('./routes/gog');
 app.use('/api/gog', gogRoutes);
 console.log('[DEBUG] server.js: GOG routes mounted.');
 
+// Import and use Xbox routes
+const xboxRoutes = require('./routes/xbox');
+app.use('/api/xbox', xboxRoutes);
+logger.info('Xbox routes mounted under /api/xbox.');
+console.log('[DEBUG] server.js: Xbox routes mounted.');
+
 console.log('[DEBUG] server.js: Core routes defined.');
 
 
