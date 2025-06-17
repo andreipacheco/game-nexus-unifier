@@ -263,3 +263,85 @@ describe('/api/xbox/user/:xuid/games', () => {
   });
 
 });
+
+describe('/api/xbox/user/:xuid/game/:titleId/achievements', () => {
+  const mockXuid = '1234567890123456';
+  const mockTitleId = 'mockGameTitleId123';
+  const mockApiDetailedAchievements = [
+    { id: 'ach1', name: 'First Achievement', description: 'Unlock this first.', progressState: 'Achieved', rewards: [{ type: 'Gamerscore', value: 10 }] },
+    { id: 'ach2', name: 'Second Achievement', description: 'Then this one.', progressState: 'NotAchieved', rewards: [{ type: 'Gamerscore', value: 20 }] },
+  ];
+
+  it('should fetch detailed achievements successfully', async () => {
+    axios.get.mockResolvedValueOnce({ data: mockApiDetailedAchievements });
+
+    const response = await request(app).get(`/api/xbox/user/${mockXuid}/game/${mockTitleId}/achievements`);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual(mockApiDetailedAchievements); // Backend returns raw data for now
+    expect(axios.get).toHaveBeenCalledWith(
+      `https://xbl.io/api/v2/achievements/player/${mockXuid}/${mockTitleId}`,
+      expect.objectContaining({
+        headers: expect.objectContaining({ 'X-Authorization': process.env.XBL_API_KEY }),
+      })
+    );
+    expect(logger.info).toHaveBeenCalledWith(expect.stringContaining(`Successfully fetched ${mockApiDetailedAchievements.length} detailed achievements`));
+  });
+
+  it('should return 400 if XUID is missing', async () => {
+    const response = await request(app).get(`/api/xbox/user//game/${mockTitleId}/achievements`);
+    expect(response.status).toBe(400);
+    expect(response.body.error).toContain('Xbox User ID (XUID) and Title ID are required.');
+  });
+
+  it('should return 400 if titleId is missing', async () => {
+    const response = await request(app).get(`/api/xbox/user/${mockXuid}/game//achievements`);
+    expect(response.status).toBe(400);
+    expect(response.body.error).toContain('Xbox User ID (XUID) and Title ID are required.');
+  });
+
+  it('should handle xbl.io API error (404 Not Found) for detailed achievements', async () => {
+    const apiErrorMsg = 'Achievements not found for specified title or user.';
+    axios.get.mockRejectedValueOnce({
+      isAxiosError: true,
+      response: { status: 404, data: { error_message: apiErrorMsg } }
+    });
+    const response = await request(app).get(`/api/xbox/user/${mockXuid}/game/${mockTitleId}/achievements`);
+    expect(response.status).toBe(404);
+    // The route now uses the error_message from xbl.io if available, then a fallback
+    expect(response.body.error).toEqual(expect.stringContaining(apiErrorMsg)); // Check if it includes original message
+    expect(response.body.error).toEqual(expect.stringContaining(`Detailed achievements not found for xuid ${mockXuid}, titleId ${mockTitleId}`)); // Check for the fallback part
+    expect(logger.error).toHaveBeenCalledWith(expect.stringContaining("API responded with status 404"), expect.any(Object));
+  });
+
+  it('should handle xbl.io API error (401 Unauthorized) for detailed achievements', async () => {
+    axios.get.mockRejectedValueOnce({
+      isAxiosError: true,
+      response: { status: 401, data: { error_message: 'Invalid API Key' } }
+    });
+    const response = await request(app).get(`/api/xbox/user/${mockXuid}/game/${mockTitleId}/achievements`);
+    expect(response.status).toBe(401);
+    expect(response.body.error).toEqual(expect.stringContaining('Xbox API request unauthorized'));
+  });
+
+  it('should handle xbl.io API returning an empty array for achievements', async () => {
+    axios.get.mockResolvedValueOnce({ data: [] });
+    const response = await request(app).get(`/api/xbox/user/${mockXuid}/game/${mockTitleId}/achievements`);
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual([]);
+    expect(logger.info).toHaveBeenCalledWith(expect.stringContaining(`Successfully fetched 0 detailed achievements`));
+  });
+
+  it('should handle unexpected (non-array) response structure from xbl.io for achievements', async () => {
+    axios.get.mockResolvedValueOnce({ data: { message: "This is not an array of achievements" } });
+    const response = await request(app).get(`/api/xbox/user/${mockXuid}/game/${mockTitleId}/achievements`);
+    // Current implementation logs a warning and returns an empty array if structure is not as expected.
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual([]); // Expect empty array due to current handling
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining("Unexpected response structure for detailed achievements"), expect.any(Object));
+  });
+
+  // Test for XBL_API_KEY missing for this specific endpoint (if not globally handled by a beforeAll,
+  // which it is, but a more specific test can be added if needed, similar to the one for the /games endpoint)
+  // For brevity, assuming the global API key check test in the other describe block is sufficient.
+});

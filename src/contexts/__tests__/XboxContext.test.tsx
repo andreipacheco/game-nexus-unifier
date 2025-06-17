@@ -34,20 +34,24 @@ describe('XboxContext', () => {
     expect(result.current.xboxGames).toEqual([]);
     expect(result.current.isLoading).toBe(false);
     expect(result.current.error).toBeNull();
+    expect(result.current.currentXuid).toBeNull();
+    expect(result.current.detailedAchievements).toEqual({});
+    expect(result.current.isLoadingDetailedAchievements).toEqual({});
+    expect(result.current.errorDetailedAchievements).toEqual({});
   });
 
-  it('fetchXboxGames should populate xboxGames and call toast on successful API call', async () => {
+  it('fetchXboxGames should populate games and set currentXuid on successful API call', async () => {
     mockAxios.get.mockResolvedValueOnce({ data: mockApiResponseData });
     const { result, waitForNextUpdate } = renderHook(() => useXbox(), { wrapper });
 
     // Use act to wrap async state updates
     await act(async () => {
       result.current.fetchXboxGames(mockXuid);
-      // Wait for the hook to process the promise resolution and update state
-      await waitForNextUpdate({ timeout: 200 }); // Added timeout for potentially slower CI
+      await waitForNextUpdate({ timeout: 200 });
     });
 
     expect(result.current.isLoading).toBe(false);
+    expect(result.current.currentXuid).toBe(mockXuid); // Check if currentXuid is set
     // Games should be sorted by name as per context implementation
     const sortedMockData = [...mockApiResponseData].sort((a, b) => a.name.localeCompare(b.name));
     expect(result.current.xboxGames).toEqual(sortedMockData);
@@ -121,5 +125,133 @@ describe('XboxContext', () => {
     expect(mockAxios.get).not.toHaveBeenCalled();
     // No toast should be called here as it's a pre-flight validation
     expect(toast).not.toHaveBeenCalled();
+  });
+
+  describe('fetchDetailedXboxAchievements', () => {
+    const mockTitleId = 'gameTitle123';
+    // Simulate raw data from your backend (which gets it from xbl.io)
+    const rawApiDetailedAchievements = [
+      {
+        id: 'ach1_id', // Assuming 'id' is present from xbl.io
+        name: 'Master Chef',
+        description: 'Complete all missions on Legendary.',
+        progressState: 'Achieved',
+        rewards: [{type: 'Gamerscore', value: 100}],
+        mediaAssets: [{type: 'Icon', url: 'icon_url_ach1.jpg'}],
+        rarity: {currentProgress: 10.5}, // xbl.io v1 example
+        progression: {timeUnlocked: '2023-01-15T12:00:00Z'}
+      },
+      {
+        name: 'Speed Runner', // Testing fallback id: ach.name
+        description: 'Finish the campaign in under 3 hours.',
+        progressState: 'NotAchieved',
+        rewards: [{type: 'Gamerscore', value: 50}],
+        // No mediaAssets, rarity, or progression for this one to test defaults
+      }
+    ];
+
+    // Expected structure after mapping logic in fetchDetailedXboxAchievements
+    const mappedDetailedAchievements: XboxDetailedAchievement[] = [
+      {
+        id: 'ach1_id',
+        name: 'Master Chef',
+        description: 'Complete all missions on Legendary.',
+        isUnlocked: true,
+        gamerscore: 100,
+        iconUrl: 'icon_url_ach1.jpg',
+        rarityPercent: 10.5,
+        unlockedTime: '2023-01-15T12:00:00Z',
+        progressState: 'Achieved',
+        rewards: [{type: 'Gamerscore', value: 100}],
+        mediaAssets: [{type: 'Icon', url: 'icon_url_ach1.jpg'}],
+        rarity: {currentProgress: 10.5},
+        howToUnlock: undefined,
+      },
+      {
+        id: 'Speed Runner',
+        name: 'Speed Runner',
+        description: 'Finish the campaign in under 3 hours.',
+        isUnlocked: false,
+        gamerscore: 50,
+        iconUrl: undefined,
+        rarityPercent: undefined,
+        unlockedTime: undefined,
+        progressState: 'NotAchieved',
+        rewards: [{type: 'Gamerscore', value: 50}],
+        mediaAssets: undefined,
+        rarity: undefined,
+        howToUnlock: undefined,
+      },
+    ];
+
+    it('should populate detailedAchievements for a titleId on success and map data correctly', async () => {
+      mockAxios.get.mockResolvedValueOnce({ data: rawApiDetailedAchievements });
+      const { result, waitForNextUpdate } = renderHook(() => useXbox(), { wrapper });
+
+      await act(async () => {
+        result.current.fetchDetailedXboxAchievements(mockXuid, mockTitleId);
+        // One update for isLoading true, another for data and isLoading false
+        await waitForNextUpdate({ timeout: 200 });
+        await waitForNextUpdate({ timeout: 200 });
+      });
+
+      expect(result.current.isLoadingDetailedAchievements[mockTitleId]).toBe(false);
+      expect(result.current.detailedAchievements[mockTitleId]).toEqual(mappedDetailedAchievements);
+      expect(result.current.errorDetailedAchievements[mockTitleId]).toBeNull();
+      expect(mockAxios.get).toHaveBeenCalledWith(`/api/xbox/user/${mockXuid}/game/${mockTitleId}/achievements`);
+      expect(toast).toHaveBeenCalledWith(expect.objectContaining({
+        title: `Achievements for ${mockTitleId}`,
+      }));
+    });
+
+    it('should set error for a titleId on API failure when fetching detailed achievements', async () => {
+      const apiErrorMessage = "Detailed achievements API is down";
+      mockAxios.get.mockRejectedValueOnce({
+        isAxiosError: true,
+        response: { data: { error: apiErrorMessage }, status: 503 }
+      });
+      const { result, waitForNextUpdate } = renderHook(() => useXbox(), { wrapper });
+
+      await act(async () => {
+        result.current.fetchDetailedXboxAchievements(mockXuid, mockTitleId);
+        await waitForNextUpdate({ timeout: 200 });
+        await waitForNextUpdate({ timeout: 200 });
+      });
+
+      expect(result.current.isLoadingDetailedAchievements[mockTitleId]).toBe(false);
+      expect(result.current.detailedAchievements[mockTitleId]).toBeUndefined();
+      expect(result.current.errorDetailedAchievements[mockTitleId]).toBe(apiErrorMessage);
+      expect(toast).toHaveBeenCalledWith(expect.objectContaining({
+        title: "Error fetching detailed achievements",
+        description: apiErrorMessage,
+        variant: "destructive",
+      }));
+    });
+
+    it('should return null and set error if XUID is missing for detailed achievements', async () => {
+      const { result } = renderHook(() => useXbox(), { wrapper });
+      let fetchResult: XboxDetailedAchievement[] | null = []; // Initialize to non-null
+
+      await act(async () => {
+        fetchResult = await result.current.fetchDetailedXboxAchievements('', mockTitleId);
+      });
+
+      expect(fetchResult).toBeNull();
+      expect(result.current.errorDetailedAchievements[mockTitleId]).toBe("XUID and Title ID are required to fetch detailed achievements.");
+      expect(mockAxios.get).not.toHaveBeenCalled();
+    });
+
+    it('should return null and set error if titleId is missing for detailed achievements', async () => {
+      const { result } = renderHook(() => useXbox(), { wrapper });
+      let fetchResult: XboxDetailedAchievement[] | null = [];
+
+      await act(async () => {
+        fetchResult = await result.current.fetchDetailedXboxAchievements(mockXuid, '');
+      });
+
+      expect(fetchResult).toBeNull();
+      expect(result.current.errorDetailedAchievements['']).toBe("XUID and Title ID are required to fetch detailed achievements.");
+      expect(mockAxios.get).not.toHaveBeenCalled();
+    });
   });
 });
