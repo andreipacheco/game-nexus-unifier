@@ -6,8 +6,8 @@ import { Game, platformInfo, PlatformInfo } from "@/data/mockGameData";
 import { Download, Search } from "lucide-react"; // Removed AlertTriangle, Loader2, Clock, Trophy, Play
 import { Input } from "@/components/ui/input";
 import { GameCard } from "./GameCard";
-import { useSteam } from "@/context/SteamContext"; // Kept useSteam for steamUser
-import { useGog } from "@/context/GogContext";   // Kept useGog for gogUserId (used in platformFilters)
+import { useSteam } from "@/contexts/SteamContext"; // Corrected path
+import { useGog } from "@/contexts/GogContext";   // Corrected path
 
 // Removed SteamGame and GogGame interfaces as fetching is handled in Index.tsx
 

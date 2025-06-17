@@ -4,8 +4,8 @@ import { PlatformStats } from "@/components/dashboard/PlatformStats";
 import { GameLibrary } from "@/components/dashboard/GameLibrary";
 import { PlatformConnections } from "@/components/dashboard/PlatformConnections";
 import { mockGameData, Game } from "@/data/mockGameData";
-import { useSteam } from "@/context/SteamContext";
-import { useGog } from "@/context/GogContext";
+import { useSteam } from "@/contexts/SteamContext"; // Corrected path
+import { useGog } from "@/contexts/GogContext"; // Corrected path
 import { SteamGame, GogGame } from "@/types";
 
 // Helper function to convert SteamGame to Game type
