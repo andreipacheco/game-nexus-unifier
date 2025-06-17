@@ -1,6 +1,7 @@
 
 export interface Game {
   id: string;
+  appId?: string;
   title: string;
   platform: 'steam' | 'epic' | 'xbox' | 'gog';
   coverImage: string;
@@ -18,6 +19,7 @@ export interface Game {
 export const mockGameData: Game[] = [
   {
     id: '1',
+    appId: '1091500',
     title: 'Cyberpunk 2077',
     platform: 'steam',
     coverImage: '/placeholder.svg',
@@ -68,6 +70,7 @@ export const mockGameData: Game[] = [
     id: '6',
     title: 'Red Dead Redemption 2',
     platform: 'steam',
+    appId: '1174180',
     coverImage: '/placeholder.svg',
     playtime: 124.8,
     lastPlayed: '2024-06-07',
