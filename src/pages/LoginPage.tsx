@@ -5,8 +5,8 @@ import { FaGoogle } from 'react-icons/fa'; // Using react-icons for the Google l
 const LoginPage: React.FC = () => {
   const handleGoogleLogin = () => {
     // Redirect to the backend Google authentication route
-    // Assuming backend is running on port 3001 as per previous configurations
-    window.location.href = 'http://localhost:3001/auth/google';
+    // Assuming backend is running on port 3000
+    window.location.href = 'http://localhost:3000/auth/google';
   };
 
   return (

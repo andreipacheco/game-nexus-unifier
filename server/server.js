@@ -38,7 +38,7 @@ app.use(express.json());
 console.log('[DEBUG] server.js: express.json middleware applied.');
 
 // CORS configuration
-const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:8080';
 app.use(cors({
   origin: frontendUrl,
   credentials: true
