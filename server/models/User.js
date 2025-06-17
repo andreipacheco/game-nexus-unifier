@@ -1,18 +1,38 @@
 const mongoose = require('mongoose');
+const bcrypt = require('bcrypt');
 
 const UserSchema = new mongoose.Schema({
+  googleId: {
+    type: String,
+    unique: true,
+    sparse: true, // Allows null/undefined if not signing up with Google
+  },
+  email: {
+    type: String,
+    required: true,
+    unique: true,
+    trim: true,
+    lowercase: true,
+  },
+  name: {
+    type: String,
+    trim: true,
+  },
+  password: {
+    type: String,
+    // Not required, so users signing up with Google don't need a password
+  },
   steamId: {
     type: String,
     unique: true,
     sparse: true, // Allows multiple documents to have null/undefined for this field if not provided
-    // This is useful if a user in our system hasn't connected their Steam account yet.
   },
   personaName: {
     type: String,
-    trim: true, // Removes whitespace from both ends of a string
+    trim: true,
   },
   avatar: {
-    type: String, // URL to the Steam avatar
+    type: String, // URL to the Steam avatar or Google profile picture
   },
   profileUrl: {
     type: String, // URL to the Steam profile
@@ -23,21 +43,26 @@ const UserSchema = new mongoose.Schema({
   lastLogoutAt: {
     type: Date,
   },
-  // You might want to add other fields from Steam user summary, e.g.,
-  // realName: String,
-  // countryCode: String,
-  // etc.
-
-  // Timestamps
   createdAt: {
     type: Date,
     default: Date.now,
   },
-  // lastSteamSync: Date, // Could be useful to track when Steam data was last updated
 });
 
-// Optional: Add an index on steamId for faster queries if you frequently find users by it.
-// mongoose.model() will automatically create indexes defined in the schema
-// when the application starts up, provided it's not disabled.
+// Pre-save hook to hash password
+UserSchema.pre('save', async function (next) {
+  // Only hash the password if it has been modified (or is new)
+  if (!this.isModified('password') || !this.password) {
+    return next();
+  }
+
+  try {
+    const salt = await bcrypt.genSalt(10);
+    this.password = await bcrypt.hash(this.password, salt);
+    next();
+  } catch (error) {
+    next(error);
+  }
+});
 
 module.exports = mongoose.model('User', UserSchema);
