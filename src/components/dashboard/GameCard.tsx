@@ -3,7 +3,8 @@ import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Game, platformInfo } from "@/data/mockGameData";
-import { Clock, Trophy, Play, Download, MoreVertical, ListChecks } from "lucide-react";
+// ListChecks removed as Trophy is used instead for View Achievements button
+import { Clock, Trophy, Play, Download, MoreVertical } from "lucide-react";
 import { AspectRatio } from "@/components/ui/aspect-ratio";
 import { useXbox } from "@/contexts/XboxContext";
 import { DetailedAchievementsModal } from "./DetailedAchievementsModal";
@@ -181,7 +182,7 @@ export const GameCard = ({ game }: GameCardProps) => {
                 onClick={handleViewAchievementsClick}
                 disabled={!currentXuid}
               >
-                <ListChecks className="h-4 w-4 mr-2" />
+                <Trophy className="h-4 w-4 mr-2" />
                 View Achievements
               </Button>
             )}
