@@ -10,6 +10,8 @@ export interface Game {
   achievements: {
     unlocked: number;
     total: number;
+    currentGamerscore?: number; // Optional: For Xbox Gamerscore
+    totalGamerscore?: number;   // Optional: For Xbox Gamerscore
   };
   status: 'installed' | 'not_installed' | 'downloading';
   genre: string[];
