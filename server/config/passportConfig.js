@@ -18,8 +18,8 @@ function configurePassport(passportInstance) {
         logger.warn('STEAM_API_KEY is not defined. Passport SteamStrategy will not be available.');
     } else {
         passportInstance.use(new SteamStrategy({
-            returnURL: process.env.APP_BASE_URL ? `${process.env.APP_BASE_URL}/auth/steam/return` : 'http://localhost:3001/auth/steam/return', // Assuming server on 3001
-            realm: process.env.APP_BASE_URL || 'http://localhost:3001', // Assuming server on 3001
+            returnURL: process.env.APP_BASE_URL ? `${process.env.APP_BASE_URL}/auth/steam/return` : 'http://localhost:3000/auth/steam/return', // Updated port
+            realm: process.env.APP_BASE_URL || 'http://localhost:3000', // Updated port
             apiKey: process.env.STEAM_API_KEY
         },
         async function(identifier, profile, done) {
@@ -120,7 +120,7 @@ function configurePassport(passportInstance) {
         passportInstance.use(new GoogleStrategy({
             clientID: process.env.GOOGLE_CLIENT_ID,
             clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-            callbackURL: process.env.APP_BASE_URL ? `${process.env.APP_BASE_URL}/auth/google/callback` : 'http://localhost:3001/auth/google/callback', // Assuming server on 3001
+            callbackURL: process.env.APP_BASE_URL ? `${process.env.APP_BASE_URL}/auth/google/callback` : 'http://localhost:3000/auth/google/callback', // Updated port
             scope: ['profile', 'email'] // Ensure scope is passed if not default
         },
         async (accessToken, refreshToken, profile, done) => {
