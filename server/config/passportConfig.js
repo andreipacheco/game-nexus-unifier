@@ -42,6 +42,7 @@ function configurePassport(passportInstance) {
                     user.profileUrl = profile._json.profileurl;
                 }
                 // lastSteamSync or similar fields could be updated here
+                user.lastLoginAt = new Date();
                 await user.save();
                 logger.info(`Steam user updated via Passport: ${user.steamId} - ${user.personaName}`);
                 return done(null, user);
@@ -54,6 +55,7 @@ function configurePassport(passportInstance) {
                     profileUrl: profile._json && profile._json.profileurl ? profile._json.profileurl : null,
                     // other fields can be added as needed
                 });
+                newUser.lastLoginAt = new Date();
                 await newUser.save();
                 logger.info(`New Steam user created via Passport: ${newUser.steamId} - ${newUser.personaName}`);
                 return done(null, newUser);
