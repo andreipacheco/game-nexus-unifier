@@ -13,7 +13,9 @@ interface GameCardProps {
 export const GameCard = ({ game }: GameCardProps) => {
   const platform = platformInfo[game.platform];
   const achievementProgress = Math.round((game.achievements.unlocked / game.achievements.total) * 100);
-  
+  const isSteamGame = game.platform === 'steam' && game.appId;
+  const steamStoreUrl = isSteamGame ? `https://store.steampowered.com/app/${game.appId}` : '';
+
   const formatPlaytime = (hours: number) => {
     if (hours < 1) return `${Math.round(hours * 60)}m`;
     return `${Math.round(hours)}h`;
@@ -35,20 +37,55 @@ export const GameCard = ({ game }: GameCardProps) => {
     }
   };
 
+  const handlePlayInstallClick = () => {
+    if (isSteamGame && game.appId && game.status !== 'downloading') {
+      // For installed games, Steam will launch the game.
+      // For not_installed games, Steam will open the game's page or start the install process.
+      window.location.href = `steam://run/${game.appId}`;
+    }
+    // Potentially add logic for other platforms here in the future
+  };
+
   return (
     <Card className="group hover:shadow-lg transition-all duration-200">
       <CardContent className="p-0">
-        <div className="relative">
-          <AspectRatio ratio={16 / 9}>
-            <img
-              src={game.coverImage}
-              alt={game.title}
-              className="w-full h-full object-cover rounded-t-lg bg-muted"
-            />
-          </AspectRatio>
-          
-          <div className="absolute top-2 left-2 flex items-center space-x-2">
-            <Badge className={`${platform.color} text-white`}>
+        {isSteamGame ? (
+          <a href={steamStoreUrl} target="_blank" rel="noopener noreferrer">
+            <div className="relative">
+              <AspectRatio ratio={16 / 9}>
+                <img
+                  src={game.coverImage}
+                  alt={game.title}
+                  className="w-full h-full object-cover rounded-t-lg bg-muted"
+                />
+              </AspectRatio>
+              <div className="absolute top-2 left-2 flex items-center space-x-2">
+                <Badge className={`${platform.color} text-white`}>
+                  {platform.name}
+                </Badge>
+                <div className={`w-2 h-2 rounded-full ${getStatusColor(game.status)}`} />
+              </div>
+              <Button
+                size="icon"
+                variant="ghost"
+                className="absolute top-2 right-2 bg-black/50 hover:bg-black/70 text-white"
+              >
+                <MoreVertical className="h-4 w-4" />
+              </Button>
+            </div>
+          </a>
+        ) : (
+          <div className="relative">
+            <AspectRatio ratio={16 / 9}>
+              <img
+                src={game.coverImage}
+                alt={game.title}
+                className="w-full h-full object-cover rounded-t-lg bg-muted"
+              />
+            </AspectRatio>
+
+            <div className="absolute top-2 left-2 flex items-center space-x-2">
+              <Badge className={`${platform.color} text-white`}>
               {platform.name}
             </Badge>
             <div className={`w-2 h-2 rounded-full ${getStatusColor(game.status)}`} />
@@ -62,10 +99,17 @@ export const GameCard = ({ game }: GameCardProps) => {
             <MoreVertical className="h-4 w-4" />
           </Button>
         </div>
+        )}
         
         <div className="p-4 space-y-3">
           <div>
-            <h3 className="font-semibold line-clamp-1">{game.title}</h3>
+            {isSteamGame ? (
+              <a href={steamStoreUrl} target="_blank" rel="noopener noreferrer">
+                <h3 className="font-semibold line-clamp-1 hover:underline">{game.title}</h3>
+              </a>
+            ) : (
+              <h3 className="font-semibold line-clamp-1">{game.title}</h3>
+            )}
             {((Array.isArray(game.genre) && game.genre.join(', ') !== 'Unknown Genre') || (game.releaseYear !== 0 && game.releaseYear !== 'N/A')) && (
             <p className="text-sm text-muted-foreground">
               {(() => {
@@ -102,10 +146,11 @@ export const GameCard = ({ game }: GameCardProps) => {
       </CardContent>
       
       <CardFooter className="pt-0 px-4 pb-4">
-        <Button 
-          className="w-full" 
+        <Button
+          className="w-full"
           variant={game.status === 'installed' ? 'default' : 'outline'}
           disabled={game.status === 'downloading'}
+          onClick={handlePlayInstallClick}
         >
           {game.status === 'installed' ? (
             <Play className="h-4 w-4 mr-2" />
