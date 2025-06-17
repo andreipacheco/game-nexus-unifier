@@ -1,4 +1,5 @@
 
+import { Link } from "react-router-dom"; // Import Link
 import { Button } from "@/components/ui/button";
 import { Gamepad2, Settings, Library, Plug } from "lucide-react";
 
@@ -37,9 +38,11 @@ export const DashboardHeader = ({ activeView, onViewChange }: DashboardHeaderPro
               <Plug className="h-4 w-4" />
               <span>Platforms</span>
             </Button>
-            <Button variant="ghost" size="icon">
-              <Settings className="h-4 w-4" />
-            </Button>
+            <Link to="/configuration">
+              <Button variant="ghost" size="icon" aria-label="Configuration">
+                <Settings className="h-4 w-4" />
+              </Button>
+            </Link>
           </nav>
         </div>
       </div>

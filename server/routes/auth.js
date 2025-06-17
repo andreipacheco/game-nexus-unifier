@@ -7,19 +7,44 @@ const logger = require('../config/logger'); // Import logger
 // Note: The initializeAuthSteamAPI and related 'steam' variable are removed
 // as passport-steam strategy in passportConfig.js handles Steam API interaction.
 
+// --- Google Authentication Routes ---
+
+// Initiates Google authentication flow
+router.get('/google', passport.authenticate('google', {
+    scope: ['profile', 'email'] // Request access to profile and email
+}));
+
+// Handles the callback from Google after authentication attempt
+router.get('/google/callback',
+    passport.authenticate('google', {
+        failureRedirect: `${process.env.APP_BASE_URL || '/'}/login?error=google_auth_failed`, // Redirect on failure
+        failureMessage: true // Store failure message in req.session.messages
+    }),
+    (req, res) => {
+        // Successful authentication. req.user is populated by Passport's verify callback.
+        logger.info(`Google authentication successful for user: ${req.user.googleId || req.user.email}. Redirecting to dashboard.`);
+        // Redirect to frontend dashboard
+        const redirectTo = `${process.env.APP_BASE_URL || '/'}/dashboard?google_login_success=true`;
+        res.redirect(redirectTo);
+    }
+);
+
+// --- Steam Authentication Routes ---
+
 // Initiates the Steam authentication flow using Passport
 // The 'steam' string refers to the strategy name defined in passportConfig.js
 // If passport.use('steam', new SteamStrategy(...)) was used, then 'steam' is correct.
 // If passport.use(new SteamStrategy(...)) was used (no name given), Passport defaults to 'openid'
 // for OpenID based strategies, but passport-steam usually registers as 'steam'.
 router.get('/steam', passport.authenticate('steam', {
-    failureRedirect: `${process.env.APP_BASE_URL}/login?error=steam_auth_init_failed` // Redirect to a login page with error
+    failureRedirect: `${process.env.APP_BASE_URL || '/'}/login?error=steam_auth_init_failed` // Redirect to a login page with error
 }));
 
 // Handles the callback from Steam after authentication attempt
 router.get('/steam/return',
     passport.authenticate('steam', {
-        failureRedirect: `${process.env.APP_BASE_URL}/login?error=steam_auth_callback_failed`
+        failureRedirect: `${process.env.APP_BASE_URL || '/'}/login?error=steam_auth_callback_failed`, // Redirect on failure
+        failureMessage: true
     }),
     (req, res) => {
         // Successful authentication. req.user is populated by Passport's verify callback.
@@ -33,6 +58,8 @@ router.get('/steam/return',
     }
 );
 
+// --- General Logout Route ---
+
 // Logout route
 router.get('/logout', async (req, res, next) => { // Made async
     if (req.user) {
@@ -40,7 +67,8 @@ router.get('/logout', async (req, res, next) => { // Made async
             // Assuming req.user is the Mongoose User document from deserializeUser.
             req.user.lastLogoutAt = new Date();
             await req.user.save();
-            logger.info(`Updated lastLogoutAt for user: ${req.user.steamId}`);
+            const userIdForLog = req.user.steamId || req.user.googleId || req.user.email || req.user.id;
+            logger.info(`Updated lastLogoutAt for user: ${userIdForLog}`);
         } catch (dbError) {
             logger.error('Failed to update lastLogoutAt on logout', { userId: req.user.id, error: dbError });
             // This error should not prevent logout. Just log it.
@@ -51,17 +79,17 @@ router.get('/logout', async (req, res, next) => { // Made async
         if (err) {
             logger.error('Logout error', { error: err });
             // Redirect to an error page or send an error response
-            return res.redirect(`${process.env.APP_BASE_URL}/login?error=logout_failed`);
+            return res.redirect(`${process.env.APP_BASE_URL || '/'}/login?error=logout_failed`);
         }
         req.session.destroy(err => {
             if (err) {
                 logger.error('Session destruction error during logout', { error: err });
                 res.clearCookie('connect.sid'); // Default session cookie name
-                return res.redirect(`${process.env.APP_BASE_URL}/login?error=session_destroy_failed`);
+                return res.redirect(`${process.env.APP_BASE_URL || '/'}/login?error=session_destroy_failed`);
             }
             res.clearCookie('connect.sid'); // Ensure cookie is cleared
             logger.info('User logged out successfully, session destroyed. Redirecting to home.');
-            res.redirect(process.env.APP_BASE_URL || '/');
+            res.redirect(process.env.APP_BASE_URL || '/'); // Redirect to home/login page
         });
     });
 });
