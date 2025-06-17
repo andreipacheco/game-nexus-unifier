@@ -32,7 +32,7 @@ export const DetailedAchievementsModal: React.FC<DetailedAchievementsModalProps>
             Detailed list of achievements for {gameName}.
           </DialogDescription> */}
         </DialogHeader>
-        <ScrollArea className="flex-grow pr-6 -mr-6"> {/* Negative margin to compensate for pr if scrollbar appears */}
+        <ScrollArea className="flex-grow min-h-0 overflow-y-auto pr-6 -mr-6"> {/* Negative margin to compensate for pr if scrollbar appears, added min-h-0 and overflow-y-auto */}
           {isLoading && (
             <div className="space-y-3 p-1">
               {[...Array(6)].map((_, i) => (
