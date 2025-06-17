@@ -47,7 +47,7 @@ const platforms: Platform[] = [
     id: 'xbox',
     name: 'Xbox (Microsoft)',
     description: 'Connect to Xbox Live for game library and achievement data.',
-    connected: true,
+    connected: false,
     apiDocUrl: 'https://docs.microsoft.com/en-us/gaming/xbox-live/api-ref/',
     requiredCredentials: ['Client ID', 'Client Secret', 'Tenant ID'],
     icon: '🟢',
