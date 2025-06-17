@@ -1,7 +1,8 @@
 const express = require('express');
 const dotenv = require('dotenv');
-const session = require('express-session'); // Added
-const passport = require('passport'); // Added
+const session = require('express-session');
+const passport = require('passport');
+const cors = require('cors'); // Import CORS
 const connectDB = require('./config/db');
 const logger = require('./config/logger');
 
@@ -35,6 +36,51 @@ console.log('[DEBUG] server.js: Express app created.');
 // Middleware
 app.use(express.json());
 console.log('[DEBUG] server.js: express.json middleware applied.');
+
+// CORS configuration
+const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+app.use(cors({
+  origin: frontendUrl,
+  credentials: true
+}));
+console.log(`[DEBUG] server.js: CORS enabled for origin: ${frontendUrl}`);
+
+// Request Logging Middleware (add this before session or just after)
+app.use((req, res, next) => {
+  // Log specific paths or all paths if needed for debugging
+  if (req.path.includes('/api/user/me') || req.path.includes('/auth/')) {
+    logger.info(`Incoming Request: ${req.method} ${req.path}`);
+    // Safely stringify session and user to avoid issues with circular refs or large objects in logs
+    let sessionDetails = 'No session';
+    if (req.session) {
+      try {
+        sessionDetails = JSON.stringify(req.session, (key, value) => {
+          // Could filter or shorten parts of the session if too verbose
+          if (key === 'cookie') return '[Cookie Object]'; // Example: avoid logging full cookie details
+          return value;
+        }, 2);
+      } catch (e) {
+        sessionDetails = 'Error stringifying session';
+      }
+    }
+    logger.info(`  req.session: ${sessionDetails}`);
+
+    let userDetails = 'No user from session';
+    if (req.user) {
+        try {
+            userDetails = JSON.stringify(req.user, null, 2);
+        } catch(e) {
+            userDetails = 'Error stringifying user';
+        }
+    }
+    logger.info(`  req.user: ${userDetails}`);
+    logger.info(`  Origin Header: ${req.headers.origin || 'N/A'}`);
+    logger.info(`  Referer Header: ${req.headers.referer || 'N/A'}`);
+    // Logging req.cookies would require cookie-parser middleware if not already handled by another middleware
+    // logger.info(`  Cookies: ${JSON.stringify(req.cookies)}`);
+  }
+  next();
+});
 
 // Express session middleware
 app.use(session({

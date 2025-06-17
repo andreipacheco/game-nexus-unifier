@@ -22,9 +22,19 @@ router.get('/google/callback',
     }),
     (req, res) => {
         // Successful authentication. req.user is populated by Passport's verify callback.
-        logger.info(`Google authentication successful for user: ${req.user.googleId || req.user.email}. Redirecting to dashboard.`);
+        logger.info(`User authenticated via Google: ${req.user ? (req.user.id || req.user.googleId || req.user.email) : 'No user object found after auth'}`);
+        // Be cautious logging entire session in production due to sensitive data.
+        // For debugging, this can be very helpful.
+        if (req.session) {
+            logger.info(`Session details after Google auth: ${JSON.stringify(req.session, null, 2)}`);
+        } else {
+            logger.warn('No session object found on req after Google auth.');
+        }
+        logger.info(`req.user details after Google auth: ${JSON.stringify(req.user, null, 2)}`);
+
         // Redirect to frontend dashboard
         const redirectTo = `${process.env.APP_BASE_URL || '/'}/dashboard?google_login_success=true`;
+        logger.info(`Redirecting to: ${redirectTo}`);
         res.redirect(redirectTo);
     }
 );

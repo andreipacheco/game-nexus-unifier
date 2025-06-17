@@ -28,17 +28,22 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const fetchUser = async () => {
     setIsLoading(true);
+    console.log('AuthContext: Attempting to fetch user. Options: { credentials: "include" }');
     try {
-      // Assuming backend is on port 3001 for API calls
-      const response = await fetch('http://localhost:3001/api/user/me');
+      const response = await fetch('http://localhost:3001/api/user/me', {
+        credentials: 'include', // Crucial for sending session cookies
+      });
+      console.log('AuthContext: /api/user/me response status:', response.status);
       if (response.ok) {
         const userData = await response.json();
+        console.log('AuthContext: User data received:', userData);
         setUser(userData);
       } else {
-        setUser(null); // Not authenticated or error
+        console.log('AuthContext: Failed to fetch user or user not authenticated. Status:', response.statusText);
+        setUser(null);
       }
     } catch (error) {
-      console.error('Failed to fetch user:', error);
+      console.error('AuthContext: Error fetching user:', error);
       setUser(null);
     } finally {
       setIsLoading(false);
@@ -47,18 +52,20 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const logout = async () => {
     setIsLoading(true);
+    console.log('AuthContext: Attempting to logout. Options: { credentials: "include" }');
     try {
-        // Backend logout call
-        await fetch('http://localhost:3001/auth/logout'); // Assuming this is your backend logout endpoint
-        setUser(null);
+        const response = await fetch('http://localhost:3001/auth/logout', {
+            credentials: 'include', // Crucial for sending session cookies
+        });
+        console.log('AuthContext: /auth/logout response status:', response.status);
+        setUser(null); // Clear user state regardless of response for logout
     } catch (error) {
-        console.error('Logout failed:', error);
-        // Optionally handle logout errors, e.g., show a toast
+        console.error('AuthContext: Logout network error:', error);
+        setUser(null); // Still clear user state on network error
     } finally {
         setIsLoading(false);
-        // Redirect to login or home page after logout
-        // This might be better handled by the component calling logout
-        // For now, just clearing user state.
+        // Redirect can be handled by the component that calls logout,
+        // e.g., by checking isAuthenticated after logout completes.
         // window.location.href = '/login'; // Example redirect
     }
 };
