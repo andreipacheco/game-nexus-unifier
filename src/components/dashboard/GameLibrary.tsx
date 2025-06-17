@@ -3,7 +3,8 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"; // Added CardHeader, CardTitle, CardDescription
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Game, platformInfo, PlatformInfo } from "@/data/mockGameData"; // Added PlatformInfo
+import { Game } from "@/types/game"; // Added PlatformInfo
+import { platformInfo, PlatformInfo } from "@/data/platformData"; // Added PlatformInfo
 import { Clock, Trophy, Play, Download, Search, AlertTriangle, Loader2 } from "lucide-react"; // Added AlertTriangle, Loader2
 import { Input } from "@/components/ui/input";
 import { GameCard } from "./GameCard";
@@ -34,7 +35,6 @@ interface GogGame {
 }
 
 interface GameLibraryProps {
-  games: Game[]; // Existing games (e.g., from other platforms or manual entries)
   selectedPlatform: string;
   onPlatformChange: (platform: string) => void;
   // steamId?: string; // Steam ID will now come from context
@@ -120,7 +120,7 @@ const gogGameToGameType = (gogGame: GogGame): Game | null => {
 };
 
 
-export const GameLibrary = ({ games, selectedPlatform, onPlatformChange }: GameLibraryProps) => {
+export const GameLibrary = ({ selectedPlatform, onPlatformChange }: GameLibraryProps) => {
   const { steamId, steamUser } = useSteam();
   const { gogUserId } = useGog();
   const { xboxGames: xboxGamesFromContext, isLoading: isLoadingXbox, error: errorXbox } = useXbox(); // Get Xbox data
@@ -227,7 +227,6 @@ const mapXboxGameToGenericGame = (xboxGame: XboxGame): Game | null => {
 };
 
   const allGames = [
-    ...games,
     ...(steamGames.map(steamGameToGameType).filter(Boolean) as Game[]),
     ...(gogGames.map(gogGameToGameType).filter(Boolean) as Game[]),
     ...(xboxGamesFromContext.map(mapXboxGameToGenericGame).filter(Boolean) as Game[])
