@@ -44,10 +44,15 @@ describe('ConfigurationPage', () => {
     // Setup default mock for useAuth, can be overridden in tests
     mockUseAuth.mockReturnValue({
       isAuthenticated: true,
-      user: { id: 'test-user-id', email: 'test@example.com' },
+      user: {
+        id: 'test-user-id',
+        email: 'test@example.com',
+        name: 'Test User Name',
+        personaName: 'TestUserPersona', // For fallback testing
+      },
       isLoading: false,
       fetchUser: jest.fn(),
-      logout: mockLogout, // Use the specific mockLogout here
+      logout: mockLogout,
     });
   });
 
@@ -71,6 +76,62 @@ describe('ConfigurationPage', () => {
     expect(screen.getByRole('button', { name: /change password/i })).toBeInTheDocument();
     // Logout button
     expect(screen.getByRole('button', { name: /logout/i })).toBeInTheDocument();
+    // Back to Dashboard button
+    expect(screen.getByRole('button', { name: /back to dashboard/i })).toBeInTheDocument();
+  });
+
+  // --- User Profile Display Tests ---
+  describe('User Profile Display', () => {
+    it('displays user name and email correctly', () => {
+      renderWithProviders(<ConfigurationPage />);
+      expect(screen.getByText('Test User Name')).toBeInTheDocument();
+      expect(screen.getByText('test@example.com')).toBeInTheDocument();
+    });
+
+    it('displays personaName if name is not available', () => {
+      mockUseAuth.mockReturnValue({
+        isAuthenticated: true,
+        user: {
+          id: 'test-user-id-2',
+          email: 'persona@example.com',
+          name: null, // Name is null
+          personaName: 'UserPersonaName123'
+        },
+        isLoading: false,
+        fetchUser: jest.fn(),
+        logout: mockLogout,
+      });
+      renderWithProviders(<ConfigurationPage />);
+      expect(screen.getByText('UserPersonaName123')).toBeInTheDocument();
+      expect(screen.getByText('persona@example.com')).toBeInTheDocument();
+    });
+
+    it('displays N/A if no name or email is available', () => {
+      mockUseAuth.mockReturnValue({
+        isAuthenticated: true,
+        user: {
+          id: 'test-user-id-3',
+          email: null,
+          name: null,
+          personaName: null
+        },
+        isLoading: false,
+        fetchUser: jest.fn(),
+        logout: mockLogout,
+      });
+      renderWithProviders(<ConfigurationPage />);
+      // The component uses <p>{displayName}</p>, so we search for the text content directly
+      // Need to be careful if there are multiple 'N/A's, but for distinct fields it's okay.
+      // Check within specific sections if needed, but for now, direct text check.
+      const nameDisplay = screen.getAllByText('N/A').find(node => node.previousSibling && node.previousSibling.textContent === 'Name');
+      const emailDisplay = screen.getAllByText('N/A').find(node => node.previousSibling && node.previousSibling.textContent === 'Email');
+
+      // A better way to assert this is to get by specific test-ids or more structured queries if possible.
+      // For now, this relies on the text content of the <p> tags.
+      // Let's assume the structure is <Label>Name</Label><p>Test User Name</p>
+      expect(screen.getByText((content, element) => element.tagName.toLowerCase() === 'p' && content === 'N/A' && element.previousElementSibling?.textContent === 'Name')).toBeInTheDocument();
+      expect(screen.getByText((content, element) => element.tagName.toLowerCase() === 'p' && content === 'N/A' && element.previousElementSibling?.textContent === 'Email')).toBeInTheDocument();
+    });
   });
 
   // --- Password Change Tests ---
@@ -213,6 +274,16 @@ describe('ConfigurationPage', () => {
       await waitFor(() => expect(mockLogout).toHaveBeenCalledTimes(1));
       await waitFor(() => expect(require('@/components/ui/sonner').toast.error).toHaveBeenCalledWith('Logout failed. Please try again.'));
       expect(mockNavigate).not.toHaveBeenCalled(); // Should not navigate if logout fails
+    });
+  });
+
+  // --- Back to Dashboard Button Test ---
+  describe('Back to Dashboard Button', () => {
+    it('navigates to /dashboard when "Back to Dashboard" button is clicked', () => {
+      renderWithProviders(<ConfigurationPage />);
+      const backButton = screen.getByRole('button', { name: /back to dashboard/i });
+      fireEvent.click(backButton);
+      expect(mockNavigate).toHaveBeenCalledWith('/dashboard');
     });
   });
 });

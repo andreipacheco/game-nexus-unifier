@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter, CardDescription } from '@/components/ui/card';
 import { toast } from '@/components/ui/sonner';
-import { useAuth } from '@/contexts/AuthContext'; // Adjusted path assuming contexts is at src/contexts
+import { useAuth } from '@/contexts/AuthContext';
 
 const ConfigurationPage: React.FC = () => {
   const [currentPassword, setCurrentPassword] = useState('');
@@ -14,7 +14,7 @@ const ConfigurationPage: React.FC = () => {
   const [passwordChangeError, setPasswordChangeError] = useState<string | null>(null);
   const [isPasswordChanging, setIsPasswordChanging] = useState(false);
 
-  const { logout } = useAuth();
+  const { user, logout } = useAuth(); // Get user object from useAuth
   const navigate = useNavigate();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
@@ -45,11 +45,10 @@ const ConfigurationPage: React.FC = () => {
     setPasswordChangeError(null);
 
     try {
-      const response = await fetch('http://localhost:3000/api/user/change-password', { // Updated port
+      const response = await fetch('http://localhost:3000/api/user/change-password', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          // Auth token should be sent via cookie due to credentials: 'include' in AuthContext
         },
         body: JSON.stringify({
           currentPassword: currentPassword || undefined,
@@ -80,9 +79,9 @@ const ConfigurationPage: React.FC = () => {
   const handleLogout = async () => {
     setIsLoggingOut(true);
     try {
-      await logout(); // Call logout from AuthContext
+      await logout();
       toast.success('You have been logged out.');
-      navigate('/login'); // Redirect to login page
+      navigate('/login');
     } catch (error) {
       console.error('Logout failed:', error);
       toast.error('Logout failed. Please try again.');
@@ -91,9 +90,30 @@ const ConfigurationPage: React.FC = () => {
     }
   };
 
+  // Display name logic: use user.name, fallback to user.personaName, then 'N/A'
+  const displayName = user?.name || user?.personaName || 'N/A';
+  const displayEmail = user?.email || 'N/A';
+
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100 p-4">
+    <div className="flex flex-col items-center justify-start min-h-screen bg-gray-100 p-4 pt-10 md:pt-16">
       <div className="w-full max-w-md space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-2xl font-bold text-center">User Profile</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div>
+              <Label className="text-sm font-medium text-gray-700">Name</Label>
+              <p className="text-lg text-gray-900 p-2 border-b">{displayName}</p>
+            </div>
+            <div>
+              <Label className="text-sm font-medium text-gray-700">Email</Label>
+              <p className="text-lg text-gray-900 p-2 border-b">{displayEmail}</p>
+            </div>
+            {/* Add more profile information here if needed */}
+          </CardContent>
+        </Card>
+
         <Card>
           <CardHeader>
             <CardTitle className="text-2xl font-bold text-center">Change Password</CardTitle>
@@ -163,7 +183,14 @@ const ConfigurationPage: React.FC = () => {
           <CardHeader>
             <CardTitle className="text-2xl font-bold text-center">Account Actions</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4"> {/* Added space-y-4 for spacing between buttons */}
+            <Button
+              variant="secondary" // Secondary variant for less emphasis than logout's outline
+              onClick={() => navigate('/dashboard')}
+              className="w-full"
+            >
+              Back to Dashboard
+            </Button>
             <Button
               variant="outline"
               onClick={handleLogout}
