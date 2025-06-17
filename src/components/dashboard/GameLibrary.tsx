@@ -70,6 +70,7 @@ const steamGameToGameType = (steamGame: SteamGame): Game | null => {
 
   return {
     id: `steam-${steamGame.appID.toString()}`, // Unique ID for React keys
+    appId: steamGame.appID.toString(),
     title: gameTitle,
     platform: 'steam',
     coverImage: coverImg,
