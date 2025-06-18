@@ -37,6 +37,7 @@ interface GogGame {
 interface GameLibraryProps {
   selectedPlatform: string;
   onPlatformChange: (platform: string) => void;
+  onGamesUpdate?: (games: Game[]) => void;
   // steamId?: string; // Steam ID will now come from context
 }
 
@@ -120,10 +121,22 @@ const gogGameToGameType = (gogGame: GogGame): Game | null => {
 };
 
 
-export const GameLibrary = ({ selectedPlatform, onPlatformChange }: GameLibraryProps) => {
+export const GameLibrary = ({ selectedPlatform, onPlatformChange, onGamesUpdate }: GameLibraryProps) => {
   const { steamId, steamUser } = useSteam();
   const { gogUserId } = useGog();
   const { xboxGames: xboxGamesFromContext, isLoading: isLoadingXbox, error: errorXbox } = useXbox(); // Get Xbox data
+
+  // useEffect to call onGamesUpdate when game data changes
+  useEffect(() => {
+    const currentAllGames = [
+      ...(steamGames.map(steamGameToGameType).filter(Boolean) as Game[]),
+      ...(gogGames.map(gogGameToGameType).filter(Boolean) as Game[]),
+      ...(xboxGamesFromContext.map(mapXboxGameToGenericGame).filter(Boolean) as Game[])
+    ];
+    if (onGamesUpdate) {
+      onGamesUpdate(currentAllGames);
+    }
+  }, [steamGames, gogGames, xboxGamesFromContext, onGamesUpdate]);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [steamGames, setSteamGames] = useState<SteamGame[]>([]);

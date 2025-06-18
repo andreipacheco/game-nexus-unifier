@@ -9,9 +9,9 @@ interface PlatformStatsProps {
 }
 
 export const PlatformStats = ({ games }: PlatformStatsProps) => {
-  if (!games || games.length === 0) {
-    return null;
-  }
+  // if (!games || games.length === 0) {
+  //   return null;
+  // }
 
   const totalGames = games.length;
   const totalPlaytime = games.reduce((acc, game) => acc + (game.playtime || 0), 0); // Ensure playtime is handled if undefined
