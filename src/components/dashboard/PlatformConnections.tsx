@@ -203,6 +203,7 @@ export const PlatformConnections = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ npsso }),
+        credentials: 'include',
       });
       const data = await response.json();
       if (!response.ok) {
@@ -235,6 +236,7 @@ export const PlatformConnections = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ accessCode }),
+        credentials: 'include',
       });
       const data = await response.json();
       if (!response.ok) {
@@ -275,7 +277,7 @@ export const PlatformConnections = () => {
 
   const handleSteamDisconnect = async () => {
     try {
-      const response = await fetch('/auth/logout'); // Backend logout
+      const response = await fetch('/auth/logout', { credentials: 'include' }); // Backend logout
       if (response.ok) {
         clearSteamConnection(); // Clear context and localStorage
         console.log('Successfully logged out from backend and cleared Steam connection.');

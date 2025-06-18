@@ -70,7 +70,7 @@ export const GameLibrary = ({ selectedPlatform, onPlatformChange }: GameLibraryP
     if (userId) {
       setIsLoadingAllGames(true);
       setAllGamesError(null);
-      fetch(`/api/user/${userId}/games`)
+      fetch(`/api/user/${userId}/games`, { credentials: 'include' })
         .then(res => {
           if (!res.ok) {
             return res.json().then(err => { throw new Error(err.message || `HTTP error! status: ${res.status}`) });

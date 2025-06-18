@@ -45,6 +45,7 @@ const PsnTrophyData: React.FC = () => {
 
       try {
         const response = await fetch('/api/psn/trophy-summary', {
+          credentials: 'include',
           headers: {
             'Authorization': `Bearer ${accessToken}`,
           },
