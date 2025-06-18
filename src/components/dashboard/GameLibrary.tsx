@@ -7,6 +7,8 @@ import { Game, platformInfo, PlatformInfo } from "@/data/mockGameData"; // Added
 import { Clock, Trophy, Play, Download, Search, AlertTriangle, Loader2 } from "lucide-react"; // Added AlertTriangle, Loader2
 import { Input } from "@/components/ui/input";
 import { GameCard } from "./GameCard";
+import PsnGameLibrary from '@/components/dashboard/PsnGameLibrary'; // Added import
+import PsnTrophyData from '@/components/dashboard/PsnTrophyData'; // Added import
 
 // Basic interface for Steam games (adapt as needed based on actual API response)
 interface SteamGame {
@@ -420,6 +422,16 @@ const mapXboxGameToGenericGame = (xboxGame: XboxGame): Game | null => {
           </CardContent>
         </Card>
       )}
+
+      {/* PSN Trophy Data */}
+      <div className="mt-8">
+        <PsnTrophyData />
+      </div>
+
+      {/* PSN Game Library */}
+      <div className="mt-8">
+        <PsnGameLibrary />
+      </div>
     </div>
   );
 };

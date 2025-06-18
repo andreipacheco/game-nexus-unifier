@@ -24,7 +24,8 @@
     "passport-steam": "^1.0.18",
     "react-icons": "^5.5.0",
     "steamapi": "^3.1.2",
-    "winston": "^3.17.0"
+    "winston": "^3.17.0",
+    "psn-api": "^2.14.0"
   },
   "devDependencies": {
     "@babel/core": "^7.27.4",
