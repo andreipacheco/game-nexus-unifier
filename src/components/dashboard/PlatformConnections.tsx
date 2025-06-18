@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { useSteam } from "@/contexts/SteamContext";
 import { useGog } from "@/contexts/GogContext";
 import { useXbox } from "@/contexts/XboxContext"; // Import useXbox
+// import { usePlaystation } from "@/contexts/PlaystationContext"; // Placeholder for Playstation context
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -63,6 +64,16 @@ const platforms: Platform[] = [
     requiredCredentials: ['Client ID', 'Client Secret'],
     icon: '🟣',
     color: 'bg-purple-600'
+  },
+  {
+    id: 'playstation',
+    name: 'Playstation',
+    description: 'Connect your Playstation Network account using your NPSSO token.',
+    connected: false, // Initially not connected
+    apiDocUrl: 'https://psn-api.achievements.app/documentation', // Or relevant NPSSO token guide
+    requiredCredentials: ['NPSSO Token'],
+    icon: '🎮', // Placeholder, Gamepad2 can be reused or a specific emoji
+    color: 'bg-blue-500' // Playstation blue
   }
 ];
 
@@ -90,6 +101,7 @@ export const PlatformConnections = () => {
   const [localSteamError, setLocalSteamError] = useState<string | null>(null);
   const [gogIdInput, setGogIdInput] = useState<string>("");
   const [xuidInput, setXuidInput] = useState<string>(""); // For XUID input
+  const [npssoInput, setNpssoInput] = useState<string>(""); // For NPSSO input
 
   // GOG Context
   const {
@@ -107,6 +119,15 @@ export const PlatformConnections = () => {
     isLoading: isLoadingXbox,
     error: errorXbox
   } = useXbox();
+
+  // Placeholder for Playstation context values - replace when context is implemented
+  const {
+    // playstationGames, // Example: games loaded from Playstation
+    // connectPlaystation, // Example: function to initiate connection
+    // disconnectPlaystation, // Example: function to disconnect
+    // isLoading: isLoadingPlaystation, // Example: loading state
+    // error: errorPlaystation, // Example: error state
+  } = {} /* usePlaystation() */; // Commented out until context is created
 
   // Effect to handle Steam OpenID callback
   useEffect(() => {
@@ -157,10 +178,15 @@ export const PlatformConnections = () => {
           // Xbox is connected if there are games and no error
           return { ...p, connected: xboxGames.length > 0 && !errorXbox };
         }
+        // Placeholder for Playstation connection status - update when context exists
+        if (p.id === 'playstation') {
+          // return { ...p, connected: playstationGames && playstationGames.length > 0 && !errorPlaystation };
+          return { ...p, connected: false }; // Default to false for now
+        }
         return p;
       })
     );
-  }, [isAuthenticated, gogUserId, xboxGames, errorXbox]); // Add Xbox dependencies
+  }, [isAuthenticated, gogUserId, xboxGames, errorXbox /* playstationGames, errorPlaystation */]); // Add Playstation dependencies when context is used
 
 
   const handleSteamAuthRedirect = () => {
@@ -225,6 +251,7 @@ export const PlatformConnections = () => {
           const isSteam = platform.id === 'steam';
           const isGog = platform.id === 'gog';
           const isXbox = platform.id === 'xbox';
+          const isPlaystation = platform.id === 'playstation';
 
           // Determine connected status
           let isPlatformConnected = platform.connected; // Uses the derived value from useEffect
@@ -234,9 +261,12 @@ export const PlatformConnections = () => {
             isPlatformConnected = !!gogUserId && !isLoadingGogUserId;
           } else if (isXbox) {
             isPlatformConnected = xboxGames.length > 0 && !isLoadingXbox && !errorXbox;
+          } else if (isPlaystation) {
+            // isPlatformConnected = playstationGames && playstationGames.length > 0 && !errorPlaystation; // Placeholder
+            isPlatformConnected = false; // Default for now
           }
 
-          const platformIcon = isXbox ? <Gamepad2 className="h-6 w-6" /> : <span className="text-2xl">{platform.icon}</span>;
+          const platformIcon = isXbox || isPlaystation ? <Gamepad2 className="h-6 w-6" /> : <span className="text-2xl">{platform.icon}</span>;
 
           return (
             <Card key={platform.id} className="relative">
@@ -266,6 +296,8 @@ export const PlatformConnections = () => {
                     : isGog && isLoadingGogUserId ? 'Verifying GOG connection...'
                     : isXbox && isPlatformConnected ? `Xbox Connected (${xboxGames.length} games loaded). `
                     : isXbox && isLoadingXbox ? 'Loading Xbox games...'
+                    : isPlaystation && isPlatformConnected ? `Playstation Connected. ` // Add details when context is available
+                    : isPlaystation && false /* isLoadingPlaystation */ ? 'Loading Playstation data...' // Placeholder
                     : platform.description}
                   {isSteam && contextSteamUser && (
                     <a href={contextSteamUser.profileUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline ml-1">View Profile</a>
@@ -279,6 +311,10 @@ export const PlatformConnections = () => {
                 )}
                 {(isXbox && errorXbox) && (
                   <p className="text-sm text-red-500 bg-red-100 p-2 rounded mt-1">{errorXbox}</p>
+                )}
+                {/* Placeholder for Playstation error display */}
+                {(isPlaystation && false /* errorPlaystation */) && (
+                  <p className="text-sm text-red-500 bg-red-100 p-2 rounded mt-1">{/* errorPlaystation */}</p>
                 )}
               </CardHeader>
               
@@ -467,13 +503,55 @@ export const PlatformConnections = () => {
                     </div>
                   </>
                 )}
+
+                {isPlaystation && (
+                  <div className="space-y-3">
+                    {isPlatformConnected ? (
+                      <div className="flex flex-col items-center space-y-2">
+                        <p className="text-sm text-green-600">Playstation Connected.</p>
+                        {/* <Button onClick={handlePlaystationDisconnect} variant="outline" className="w-full">
+                          <XCircle className="h-4 w-4 mr-2" /> Disconnect Playstation
+                        </Button> */}
+                        <p className="text-xs text-muted-foreground">Disconnect functionality to be added with context.</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <div>
+                          <Label htmlFor="npssoInput">NPSSO Token</Label>
+                          <Input
+                            id="npssoInput"
+                            type="password" // Keep as password for sensitivity
+                            placeholder="Enter your NPSSO Token"
+                            value={npssoInput}
+                            onChange={(e) => setNpssoInput(e.target.value)}
+                            className="mt-1"
+                            // disabled={isLoadingPlaystation} // Placeholder
+                          />
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Refer to <a href={platform.apiDocUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">NPSSO documentation</a> for how to obtain this token.
+                          </p>
+                        </div>
+                        <Button
+                          // onClick={handlePlaystationConnect} // Placeholder
+                          onClick={() => console.log("Attempting to connect Playstation with NPSSO:", npssoInput)}
+                          className="w-full"
+                          disabled={!npssoInput.trim() /* || isLoadingPlaystation */} // Placeholder
+                        >
+                          <Plug className="h-4 w-4 mr-2" />
+                          {/* {isLoadingPlaystation ? 'Connecting...' : 'Connect Playstation'} */}
+                          Connect Playstation (Placeholder)
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                )}
               </CardContent>
             </Card>
           );
         })}
       </div>
       
-      {/* Integration Status Card - Updated to reflect GOG connection */}
+      {/* Integration Status Card - Updated to reflect GOG and Playstation connection */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center space-x-2">
@@ -490,18 +568,17 @@ export const PlatformConnections = () => {
               if (p.id === 'steam') return isAuthenticated;
               if (p.id === 'gog') return !!gogUserId;
               if (p.id === 'xbox') return xboxGames.length > 0 && !errorXbox;
+              if (p.id === 'playstation') return p.connected; // Use p.connected for now, update with context
               return p.connected;
             }).map((platform) => (
               <div key={platform.id} className="space-y-2">
                 <div className="flex items-center space-x-2">
-                  {platform.id === 'xbox' ? <Gamepad2 className="h-5 w-5" /> : <div className="text-lg">{platform.icon}</div>}
+                  {platform.id === 'xbox' || platform.id === 'playstation' ? <Gamepad2 className="h-5 w-5" /> : <div className="text-lg">{platform.icon}</div>}
                   <span className="font-medium">{platform.name}</span>
                 </div>
                 <div className="text-sm text-muted-foreground space-y-1">
                   <div>✓ Game Library</div>
-                  {/* <div>✓ Playtime Data</div> Playtime might not be available for Xbox via this API */}
                   <div>✓ Achievements</div>
-                  {/* <div>✓ Last Played</div> Last Played might not be available */}
                 </div>
                 {platform.id === 'steam' && contextSteamUser && isAuthenticated && (
                   <div className="text-xs p-2 bg-blue-50 rounded border border-blue-200">
@@ -517,7 +594,12 @@ export const PlatformConnections = () => {
                 {platform.id === 'xbox' && xboxGames.length > 0 && !errorXbox && (
                   <div className="text-xs p-2 bg-green-50 rounded border border-green-200">
                     <p className="font-medium">Xbox Games: {xboxGames.length}</p>
-                    {/* Display XUID if it were stored, for now, it's in xuidInput if user typed it */}
+                  </div>
+                )}
+                {platform.id === 'playstation' && platform.connected && ( // Placeholder
+                  <div className="text-xs p-2 bg-blue-500 text-white rounded border border-blue-700">
+                    <p className="font-medium">Playstation Connected</p>
+                    {/* Add details like PSN ID when context is available */}
                   </div>
                 )}
               </div>
@@ -526,6 +608,7 @@ export const PlatformConnections = () => {
                if (p.id === 'steam') return !isAuthenticated;
                if (p.id === 'gog') return !gogUserId;
                if (p.id === 'xbox') return !(xboxGames.length > 0 && !errorXbox);
+               if (p.id === 'playstation') return !p.connected; // Use !p.connected for now
                return !p.connected;
              }).length === platformsState.length && (
               <p className="text-muted-foreground col-span-full">No platforms connected yet.</p>

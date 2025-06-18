@@ -163,6 +163,12 @@ app.use('/api/xbox', xboxRoutes);
 logger.info('Xbox routes mounted under /api/xbox.');
 console.log('[DEBUG] server.js: Xbox routes mounted.');
 
+// Import and use Playstation routes
+const playstationRoutes = require('./routes/playstation.js'); // .js extension is optional but consistent
+app.use('/api/playstation', playstationRoutes);
+logger.info('Playstation routes mounted under /api/playstation.');
+console.log('[DEBUG] server.js: Playstation routes mounted.');
+
 console.log('[DEBUG] server.js: Core routes defined.');
 
 

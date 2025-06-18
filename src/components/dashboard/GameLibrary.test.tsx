@@ -2,8 +2,11 @@ import React from 'react';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { GameLibrary } from './GameLibrary';
-import { Game } from '@/data/mockGameData'; // Assuming Game type is exported
+import { Game, PlatformInfo } from '@/data/mockGameData'; // Assuming Game type is exported, Added PlatformInfo
 import { useSteam } from '@/contexts/SteamContext'; // Import useSteam
+import { useGog } from '@/contexts/GogContext'; // Import useGog
+import { useXbox } from '@/contexts/XboxContext'; // Import useXbox
+import { usePlaystation, PlaystationGame } from '@/contexts/PlaystationContext'; // Import usePlaystation and PlaystationGame type
 import fetchMock from 'jest-fetch-mock';
 
 // Define SteamUserProfile for mockSteamProfile if needed for explicit typing, mirroring SteamContext.tsx
@@ -74,31 +77,56 @@ describe('GameLibrary Component', () => {
 jest.mock('@/contexts/SteamContext', () => ({
   useSteam: jest.fn(),
 }));
+// Mock useGog hook
+jest.mock('@/contexts/GogContext', () => ({
+  useGog: jest.fn(),
+}));
+// Mock useXbox hook
+jest.mock('@/contexts/XboxContext', () => ({
+  useXbox: jest.fn(),
+}));
+// Mock usePlaystation hook
+jest.mock('@/contexts/PlaystationContext', () => ({
+  usePlaystation: jest.fn(),
+}));
 
 const mockUseSteam = useSteam as jest.Mock;
+const mockUseGog = useGog as jest.Mock;
+const mockUseXbox = useXbox as jest.Mock;
+const mockUsePlaystation = usePlaystation as jest.Mock;
 
 
 describe('GameLibrary Component', () => {
   beforeEach(() => {
     fetchMock.resetMocks();
     mockGameCard.mockClear(); // Clear mock before each test
+
+    // Default mock values for all contexts
     mockUseSteam.mockReturnValue({
-      steamId: null,
-      steamUser: null,
-      isAuthenticated: false, // Default to not authenticated
-      isLoadingSteamProfile: false,
-      steamProfileError: null,
+      steamId: null, steamUser: null, isAuthenticated: false,
+      isLoadingSteamProfile: false, steamProfileError: null,
+    });
+    mockUseGog.mockReturnValue({
+      gogUserId: null, isLoadingGogGames: false, gogGamesError: null,
+      // Assuming gogGames are fetched internally or not relevant for default GameLibrary state here
+    });
+    mockUseXbox.mockReturnValue({
+      xboxGames: [], isLoading: false, error: null,
+    });
+    mockUsePlaystation.mockReturnValue({
+      npssoToken: null, playstationGames: [], isLoadingPlaystation: false, errorPlaystation: null,
     });
   });
 
-  it('should render local games initially when not authenticated', () => {
-    render(<GameLibrary games={mockGames} selectedPlatform="all" onPlatformChange={() => {}} />);
-    expect(screen.getByText('Local Game 1')).toBeInTheDocument();
-    expect(screen.getByText('Local Game 2')).toBeInTheDocument();
-    expect(screen.queryByText('Counter-Strike 2')).not.toBeInTheDocument(); // Steam game should not be there
+  it('should render local games initially when no platforms are connected', () => {
+    render(<GameLibrary games={mockGames} selectedPlatform="all" onPlatformChange={jest.fn()} />);
+    expect(screen.getByText('Local Game 1 - Achievements: 5/10')).toBeInTheDocument();
+    expect(screen.getByText('Local Game 2 - Achievements: 1/20')).toBeInTheDocument();
+    expect(screen.queryByText(/Counter-Strike 2/i)).not.toBeInTheDocument(); // Steam game should not be there
   });
 
-  it('should fetch and display Steam games when steamId and steamUser are in context', async () => {
+  // --- Steam Tests (existing, slightly adapted) ---
+  it('should fetch and display Steam games when steamId is present', async () => {
     const mockSteamGames = [
       {
         appID: 730,
@@ -132,8 +160,7 @@ describe('GameLibrary Component', () => {
       <GameLibrary
         games={mockGames}
         selectedPlatform="all"
-        onPlatformChange={() => {}}
-        // steamId prop removed
+        onPlatformChange={jest.fn()}
       />
     );
 
@@ -190,7 +217,7 @@ describe('GameLibrary Component', () => {
       <GameLibrary
         games={mockGames}
         selectedPlatform="all"
-        onPlatformChange={() => {}}
+        onPlatformChange={jest.fn()}
       />
     );
 
@@ -221,29 +248,104 @@ describe('GameLibrary Component', () => {
       <GameLibrary
         games={[]}
         selectedPlatform="all"
-        onPlatformChange={() => {}}
+        onPlatformChange={jest.fn()}
       />
     );
     expect(screen.getByText('Loading Steam games...')).toBeInTheDocument();
 
-    await waitFor(() => {
-      expect(screen.queryByText('Loading Steam games...')).not.toBeInTheDocument();
-    });
+    await waitFor(() => expect(screen.queryByText('Loading Steam games...')).not.toBeInTheDocument());
     expect(fetchMock).toHaveBeenCalledWith(`/api/steam/user/${steamId}/games`);
   });
 
-  it('should not fetch Steam games if steamId is null in context', () => {
-    mockUseSteam.mockReturnValue({
-        steamId: null,
-        steamUser: null,
-        isAuthenticated: false,
-        isLoadingSteamProfile: false,
-        steamProfileError: null,
-    });
-    render(<GameLibrary games={mockGames} selectedPlatform="all" onPlatformChange={() => {}} />);
+  it('should not show Steam filter or fetch games if steamId is null', () => {
+    // Default state from beforeEach already has steamId: null
+    render(<GameLibrary games={mockGames} selectedPlatform="all" onPlatformChange={jest.fn()} />);
     expect(fetchMock).not.toHaveBeenCalled();
-    expect(screen.queryByRole('button', { name: /Steam/ })).not.toBeInTheDocument(); // Steam filter should not show
+    // Check if the platform filter button for Steam is NOT rendered
+    // This depends on how platformFilters are constructed. If it relies on currentPlatformInfo, it might always show.
+    // The logic in GameLibrary for platformFilters is:
+    // .filter(f => f.count > 0 || f.key === 'all' || (isConnected logic))
+    // If not connected and no games, it shouldn't show.
+    expect(screen.queryByRole('button', { name: /Steam \d+/i })).not.toBeInTheDocument();
   });
 
-  // TODO: Add tests for filtering behavior when Steam games are present and selectedPlatform changes
+  // --- Playstation Tests ---
+  const mockPSGames: PlaystationGame[] = [
+    { npCommunicationId: 'NPWR001', name: 'PS Game 1', image: 'ps1.jpg', platform: 'PS5', trophySummary: { progress: 50, earnedTrophies: { bronze: 10, silver: 5, gold: 1, platinum: 1 }, definedTrophies: { bronze: 20, silver: 10, gold: 2, platinum: 1 } }, hasTrophyGroups: false, lastUpdatedDateTime: new Date().toISOString() },
+    { npCommunicationId: 'NPWR002', name: 'PS Game 2', image: 'ps2.jpg', platform: 'PS4', trophySummary: { progress: 20, earnedTrophies: { bronze: 5, silver: 2, gold: 0, platinum: 0 }, definedTrophies: { bronze: 25, silver: 15, gold: 5, platinum: 1 } }, hasTrophyGroups: true, lastUpdatedDateTime: new Date().toISOString() },
+  ];
+
+  it('renders Playstation filter button with correct count when connected', async () => {
+    mockUsePlaystation.mockReturnValueOnce({
+      npssoToken: 'mock-npsso-token',
+      playstationGames: mockPSGames,
+      isLoadingPlaystation: false,
+      errorPlaystation: null,
+    });
+    render(<GameLibrary games={[]} selectedPlatform="all" onPlatformChange={jest.fn()} />);
+
+    const psFilterButton = await screen.findByRole('button', { name: /Playstation \d+/i });
+    expect(psFilterButton).toBeInTheDocument();
+    expect(within(psFilterButton).getByText('2')).toBeInTheDocument(); // Count of mockPSGames
+  });
+
+  it('displays Playstation games when data is available', async () => {
+    mockUsePlaystation.mockReturnValueOnce({
+      npssoToken: 'mock-npsso-token',
+      playstationGames: mockPSGames,
+      isLoadingPlaystation: false,
+      errorPlaystation: null,
+    });
+    render(<GameLibrary games={[]} selectedPlatform="all" onPlatformChange={jest.fn()} />);
+
+    expect(await screen.findByText(/PS Game 1 - Achievements: 17\/34/i)).toBeInTheDocument();
+    expect(await screen.findByText(/PS Game 2 - Achievements: 7\/46/i)).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(mockGameCard).toHaveBeenCalledWith(expect.objectContaining({
+        game: expect.objectContaining({ id: 'playstation-NPWR001', title: 'PS Game 1', platform: 'playstation' })
+      }));
+      expect(mockGameCard).toHaveBeenCalledWith(expect.objectContaining({
+        game: expect.objectContaining({ id: 'playstation-NPWR002', title: 'PS Game 2', platform: 'playstation' })
+      }));
+    });
+  });
+
+  it('filters by Playstation games when "Playstation" filter is selected', async () => {
+    mockUsePlaystation.mockReturnValueOnce({
+      npssoToken: 'mock-npsso-token',
+      playstationGames: mockPSGames,
+      isLoadingPlaystation: false,
+      errorPlaystation: null,
+    });
+    // Render with "playstation" selected
+    render(<GameLibrary games={mockGames} selectedPlatform="playstation" onPlatformChange={jest.fn()} />);
+
+    expect(await screen.findByText(/PS Game 1 - Achievements: 17\/34/i)).toBeInTheDocument();
+    expect(await screen.findByText(/PS Game 2 - Achievements: 7\/46/i)).toBeInTheDocument();
+    expect(screen.queryByText('Local Game 1 - Achievements: 5/10')).not.toBeInTheDocument();
+  });
+
+  it('displays loading indicator for Playstation games', () => {
+    mockUsePlaystation.mockReturnValueOnce({
+      npssoToken: 'mock-npsso-token',
+      playstationGames: [],
+      isLoadingPlaystation: true,
+      errorPlaystation: null,
+    });
+    render(<GameLibrary games={[]} selectedPlatform="all" onPlatformChange={jest.fn()} />);
+    expect(screen.getByText('Loading Playstation games...')).toBeInTheDocument();
+  });
+
+  it('displays error message for Playstation games', async () => {
+    mockUsePlaystation.mockReturnValueOnce({
+      npssoToken: 'mock-npsso-token',
+      playstationGames: [],
+      isLoadingPlaystation: false,
+      errorPlaystation: 'Fake PSN Connection Error',
+    });
+    render(<GameLibrary games={[]} selectedPlatform="all" onPlatformChange={jest.fn()} />);
+    expect(await screen.findByText('Error Loading Playstation Games')).toBeInTheDocument();
+    expect(await screen.findByText('Fake PSN Connection Error')).toBeInTheDocument();
+  });
 });

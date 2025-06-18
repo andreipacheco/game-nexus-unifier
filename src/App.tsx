@@ -13,6 +13,7 @@ import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { SteamProvider } from "./contexts/SteamContext";
 import { GogProvider } from "./contexts/GogContext";
 import { XboxProvider } from "./contexts/XboxContext";
+import { PlaystationProvider } from "./contexts/PlaystationContext"; // Added PlaystationProvider
 
 const queryClient = new QueryClient();
 
@@ -85,13 +86,15 @@ const App = () => (
       <SteamProvider>
         <GogProvider>
           <XboxProvider>
-            <TooltipProvider>
-              <Toaster />
-              <Sonner />
-              <BrowserRouter>
-                <AppRoutes /> {/* Use the new AppRoutes component */}
-              </BrowserRouter>
-            </TooltipProvider>
+            <PlaystationProvider> {/* Added PlaystationProvider */}
+              <TooltipProvider>
+                <Toaster />
+                <Sonner />
+                <BrowserRouter>
+                  <AppRoutes /> {/* Use the new AppRoutes component */}
+                </BrowserRouter>
+              </TooltipProvider>
+            </PlaystationProvider>
           </XboxProvider>
         </GogProvider>
       </SteamProvider>
