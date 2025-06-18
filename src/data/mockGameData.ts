@@ -1,3 +1,5 @@
+import { Gamepad2, Laptop, MonitorPlay, Puzzle } from "lucide-react";
+import React from "react"; // Required for JSX type React.ReactNode
 
 export interface Game {
   id: string;
@@ -83,10 +85,28 @@ export const mockGameData: Game[] = [
   }
 ];
 
-export const platformInfo = {
-  steam: { name: 'Steam', color: 'bg-blue-600', icon: '🟦' },
-  epic: { name: 'Epic Games', color: 'bg-gray-800', icon: '⚫' },
-  xbox: { name: 'Xbox', color: 'bg-green-600', icon: '🟢' },
-  gog: { name: 'GOG', color: 'bg-purple-600', icon: '🟣' },
-  psn: { name: 'PlayStation', color: '#003087', icon: '🎮' }
+// Type for individual platform information
+export interface PlatformDetail {
+  name: string;
+  color: string; // Tailwind CSS background class
+  icon: () => React.ReactNode; // Function returning a JSX element for the icon
+}
+
+// Type for the platformInfo object
+export interface PlatformInfo {
+  steam: PlatformDetail;
+  epic: PlatformDetail;
+  xbox: PlatformDetail;
+  gog: PlatformDetail;
+  psn: PlatformDetail;
+  // Add other platforms here as needed
+}
+
+
+export const platformInfo: PlatformInfo = {
+  steam: { name: 'Steam', color: 'bg-slate-700', icon: () => <MonitorPlay className="h-4 w-4" /> },
+  epic: { name: 'Epic Games', color: 'bg-gray-800', icon: () => <Laptop className="h-4 w-4" /> },
+  xbox: { name: 'Xbox', color: 'bg-green-600', icon: () => <Gamepad2 className="h-4 w-4" /> },
+  gog: { name: 'GOG', color: 'bg-purple-600', icon: () => <Puzzle className="h-4 w-4" /> },
+  psn: { name: 'PlayStation', color: 'bg-blue-700', icon: () => <Gamepad2 className="h-4 w-4" /> }
 };

@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"; // Added CardHeader, CardTitle, CardDescription
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Game, platformInfo, PlatformInfo } from "@/data/mockGameData";
+import { Game, platformInfo, PlatformInfo, mockGameData } from "@/data/mockGameData"; // Imported mockGameData
 import { Gamepad2, Search, AlertTriangle, Loader2 } from "lucide-react"; // Simpler imports for now
 import { Input } from "@/components/ui/input";
 import { GameCard } from "./GameCard";
@@ -89,14 +89,15 @@ export const GameLibrary = ({ selectedPlatform, onPlatformChange }: GameLibraryP
           } else {
             // Handle unexpected response structure
             console.error("Unexpected data structure from /api/user/:userId/games:", data);
-            setAllGamesFromDb([]);
-            setAllGamesError("Received unexpected data from server.");
+            setAllGamesError("Failed to load your games due to unexpected data. Displaying sample data.");
+            setAllGamesFromDb(mockGameData); // Fallback to mockData
           }
         })
         .catch(err => {
           console.error("Failed to fetch all games:", err);
-          setAllGamesError(err.message || "Failed to load games from database.");
-          setAllGamesFromDb([]); // Clear games on error
+          // Use a more user-friendly message and provide mock data
+          setAllGamesError("Failed to load your games. Displaying sample data.");
+          setAllGamesFromDb(mockGameData); // Fallback to mockData
         })
         .finally(() => {
           setIsLoadingAllGames(false);
@@ -148,6 +149,7 @@ export const GameLibrary = ({ selectedPlatform, onPlatformChange }: GameLibraryP
     ...Object.entries(currentPlatformInfo).map(([key, info]) => ({
       key,
       name: info.name,
+      icon: info.icon, // Pass the icon function
       count: allGames.filter(game => game.platform === key).length
     }))
   ].filter(f => {
@@ -181,6 +183,8 @@ export const GameLibrary = ({ selectedPlatform, onPlatformChange }: GameLibraryP
               onClick={() => onPlatformChange(filter.key)}
               className="flex items-center space-x-2"
             >
+              {/* Render the icon component if it exists. Default h-4 w-4 is in mockGameData.ts */}
+              {filter.icon && <filter.icon />}
               <span>{filter.name}</span>
               <Badge variant="secondary" className="ml-1">
                 {filter.count}
@@ -220,9 +224,17 @@ export const GameLibrary = ({ selectedPlatform, onPlatformChange }: GameLibraryP
           </CardHeader>
           <CardContent>
             <p className="text-destructive">{allGamesError}</p>
-            <p className="text-sm text-muted-foreground mt-1">
-              Could not fetch your games from the database. Please try again later or check your connections.
-            </p>
+            {/* No longer showing the generic "Could not fetch" message here if we are showing mock data.
+                The error message itself in allGamesError should indicate that sample data is shown. */}
+            { allGamesError && allGamesError.includes("sample data") ?
+              <p className="text-sm text-muted-foreground mt-1">
+                We encountered an issue loading your live game data. In the meantime, you can explore the app with sample games.
+              </p>
+              :
+              <p className="text-sm text-muted-foreground mt-1">
+                Could not fetch your games from the database. Please try again later or check your connections.
+              </p>
+            }
           </CardContent>
         </Card>
       )}
