@@ -95,10 +95,10 @@ const PsnTrophyData: React.FC = () => {
         <p>Progress to Next Level: {trophySummary.progress}%</p>
         <h4 className="font-semibold mt-2">Earned Trophies:</h4>
         <ul className="list-disc list-inside">
-          <li>Platinum: {trophySummary.earnedTrophies.platinum}</li>
-          <li>Gold: {trophySummary.earnedTrophies.gold}</li>
-          <li>Silver: {trophySummary.earnedTrophies.silver}</li>
-          <li>Bronze: {trophySummary.earnedTrophies.bronze}</li>
+          <li>Platinum: {trophySummary?.earnedTrophies?.platinum || 0}</li>
+          <li>Gold: {trophySummary?.earnedTrophies?.gold || 0}</li>
+          <li>Silver: {trophySummary?.earnedTrophies?.silver || 0}</li>
+          <li>Bronze: {trophySummary?.earnedTrophies?.bronze || 0}</li>
         </ul>
       </div>
     </div>
