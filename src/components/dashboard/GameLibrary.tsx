@@ -126,6 +126,8 @@ export const GameLibrary = ({ selectedPlatform, onPlatformChange, onGamesUpdate 
   const { gogUserId } = useGog();
   const { xboxGames: xboxGamesFromContext, isLoading: isLoadingXbox, error: errorXbox } = useXbox(); // Get Xbox data
 
+  const [internalAllGames, setInternalAllGames] = useState<Game[]>([]);
+
   // useEffect to call onGamesUpdate when game data changes
   useEffect(() => {
     const currentAllGames = [
@@ -133,6 +135,8 @@ export const GameLibrary = ({ selectedPlatform, onPlatformChange, onGamesUpdate 
       ...(gogGames.map(gogGameToGameType).filter(Boolean) as Game[]),
       ...(xboxGamesFromContext.map(mapXboxGameToGenericGame).filter(Boolean) as Game[])
     ];
+    setInternalAllGames(currentAllGames);
+
     if (onGamesUpdate) {
       onGamesUpdate(currentAllGames);
     }
@@ -239,11 +243,11 @@ const mapXboxGameToGenericGame = (xboxGame: XboxGame): Game | null => {
   };
 };
 
-  const allGames = [
-    ...(steamGames.map(steamGameToGameType).filter(Boolean) as Game[]),
-    ...(gogGames.map(gogGameToGameType).filter(Boolean) as Game[]),
-    ...(xboxGamesFromContext.map(mapXboxGameToGenericGame).filter(Boolean) as Game[])
-  ];
+  // const allGames = [
+  //   ...(steamGames.map(steamGameToGameType).filter(Boolean) as Game[]),
+  //   ...(gogGames.map(gogGameToGameType).filter(Boolean) as Game[]),
+  //   ...(xboxGamesFromContext.map(mapXboxGameToGenericGame).filter(Boolean) as Game[])
+  // ];
 
   const currentPlatformInfo: PlatformInfo = {
     ...platformInfo,
@@ -252,7 +256,7 @@ const mapXboxGameToGenericGame = (xboxGame: XboxGame): Game | null => {
 
   const SsearchTermLowerCase = searchTerm.toLowerCase(); // Pre-calculate for efficiency
 
-  const filteredGames = allGames.filter(game => {
+  const filteredGames = internalAllGames.filter(game => {
     // Defensive check for game.platform matching selectedPlatform
     const matchesPlatform = selectedPlatform === 'all' ||
                             (game.platform &&
@@ -278,11 +282,11 @@ const mapXboxGameToGenericGame = (xboxGame: XboxGame): Game | null => {
   });
 
   const platformFilters = [
-    { key: 'all', name: 'All Platforms', count: allGames.length },
+    { key: 'all', name: 'All Platforms', count: internalAllGames.length },
     ...Object.entries(currentPlatformInfo).map(([key, info]) => ({
       key,
       name: info.name,
-      count: allGames.filter(game => game.platform === key).length
+      count: internalAllGames.filter(game => game.platform === key).length
     }))
   ].filter(f => {
       if (f.key === 'all') return true;
