@@ -1,8 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcrypt');
-const User = require('../models/User'); // Import User model
+const User =require('../models/User'); // Import User model
 const logger = require('../config/logger');
+const PsnGame = require('../models/PsnGame'); // Import PsnGame model
 
 // Middleware to ensure user is authenticated
 const ensureAuthenticated = (req, res, next) => {
@@ -86,3 +87,75 @@ router.post('/change-password', ensureAuthenticated, async (req, res) => {
 });
 
 module.exports = router;
+
+// GET /api/user/:userId/games - Fetches all games for a user from the database
+router.get('/:userId/games', ensureAuthenticated, async (req, res) => {
+  try {
+    // Authorization: Ensure the authenticated user is requesting their own games
+    // Alternatively, allow admins to access any user's games (not implemented here)
+    if (req.user.id !== req.params.userId) {
+      logger.warn(`Unauthorized attempt to access games for user ${req.params.userId} by user ${req.user.id}`);
+      return res.status(403).json({ message: 'Forbidden: You can only access your own games.' });
+    }
+
+    let allGames = [];
+
+    // Fetch PSN games from MongoDB
+    const psnGamesFromDb = await PsnGame.find({ userId: req.params.userId }).lean(); // .lean() for plain JS objects
+
+    const mappedPsnGames = psnGamesFromDb.map(game => ({
+      id: game._id.toString(), // Use MongoDB _id as the unique id for the aggregated list
+      dbId: game._id.toString(), // Keep original db ID if needed
+      title: game.trophyTitleName, // Map from PsnGame schema
+      platform: game.platform, // Should be 'PSN'
+      coverImage: game.trophyTitleIconUrl, // Map from PsnGame schema
+      // Add other common fields that GameCard might expect or for general display
+      // These fields might not be directly available or comparable across all platform sources
+      // For PSN, we have trophy progress:
+      progress: game.progress,
+      earnedTrophies: game.earnedTrophies,
+      // Fields like playtime, lastPlayed, achievements (in a generic format)
+      // would need to be standardized if this route were to aggregate games
+      // from other sources that provide them.
+      // For now, we only have detailed PSN data from our DB.
+      // Ensure that the GameCard component can handle potentially missing fields
+      // or provide sensible defaults.
+      playtime: 0, // Placeholder
+      lastPlayed: game.lastUpdatedFromPsn || game.updatedAt, // Use PSN update time or Mongoose timestamp
+      achievements: { // Placeholder structure, adapt if PsnGame stores more details
+        unlocked: (game.earnedTrophies?.platinum || 0) +
+                  (game.earnedTrophies?.gold || 0) +
+                  (game.earnedTrophies?.silver || 0) +
+                  (game.earnedTrophies?.bronze || 0),
+        total: 0, // This would ideally come from 'definedTrophies' if stored
+        currentGamerscore: 0, // PSN doesn't use Gamerscore
+        totalGamerscore: 0,
+      },
+      status: 'owned', // Assuming all stored games are owned
+      genre: ['Unknown'], // Placeholder
+      releaseYear: 0, // Placeholder
+    }));
+
+    allGames = allGames.concat(mappedPsnGames);
+
+    // TODO: In the future, fetch games from other platforms stored in DB if any
+    // e.g., const steamDbGames = await SteamGameModel.find({ userId: req.params.userId });
+    // allGames = allGames.concat(mapSteamDbGamesToCommonFormat(steamDbGames));
+
+    // Sort games (e.g., by platform then by name)
+    allGames.sort((a, b) => {
+      if (a.platform < b.platform) return -1;
+      if (a.platform > b.platform) return 1;
+      if (a.title < b.title) return -1;
+      if (a.title > b.title) return 1;
+      return 0;
+    });
+
+    logger.info(`Fetched ${allGames.length} games from database for user ${req.params.userId}`);
+    res.json(allGames);
+
+  } catch (error) {
+    logger.error('Error fetching games for user from database:', { userId: req.params.userId, error: error.message });
+    res.status(500).json({ message: 'An error occurred while fetching games.' });
+  }
+});
