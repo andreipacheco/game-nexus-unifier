@@ -4,7 +4,8 @@ import '@testing-library/jest-dom';
 import { MemoryRouter } from 'react-router-dom';
 import { PlatformConnections } from './PlatformConnections';
 import { SteamProvider, useSteam, SteamUserProfile } from '@/contexts/SteamContext';
-import fetchMock from 'jest-fetch-mock';
+// import fetchMock from 'jest-fetch-mock'; // fetch is globally mocked below
+import { useToast } from '@/components/ui/use-toast'; // For PSN tests
 
 // Mock lucide-react icons
 jest.mock('lucide-react', () => {
@@ -36,8 +37,40 @@ jest.mock('@/contexts/SteamContext', () => ({
     clearSteamConnection: mockClearSteamConnection,
     checkUserSession: mockCheckUserSession,
     fetchSteamProfile: mockFetchSteamProfile,
+    // Add mock implementations for GOG and Xbox contexts if needed by other tests,
+    // or provide them directly in renderWithMockedContext if PlatformConnections uses them.
   })),
 }));
+
+// Mock useToast for PSN
+jest.mock('@/components/ui/use-toast', () => ({
+  useToast: () => ({
+    toast: jest.fn(),
+  }),
+}));
+
+// Mock fetch globally
+global.fetch = jest.fn();
+
+
+// Mock localStorage
+const localStorageMock = (() => {
+  let store: { [key: string]: string } = {};
+  return {
+    getItem: jest.fn((key: string) => store[key] || null),
+    setItem: jest.fn((key: string, value: string) => {
+      store[key] = value.toString();
+    }),
+    removeItem: jest.fn((key: string) => {
+      delete store[key];
+    }),
+    clear: jest.fn(() => {
+      store = {};
+    }),
+  };
+})();
+Object.defineProperty(window, 'localStorage', { value: localStorageMock });
+
 
 // Helper to render with MemoryRouter for location/navigation, and mocked context
 const renderWithMockedContext = (ui: React.ReactElement, contextValue: Partial<ReturnType<typeof useSteam>>, initialEntries: string[] = ['/']) => {
@@ -69,12 +102,23 @@ const renderWithActualProvider = (ui: React.ReactElement, initialEntries: string
   };
 
 
-describe('PlatformConnections Component (Passport Flow)', () => {
+describe('PlatformConnections Component', () => { // Broadened describe for all platforms
+  const mockSteamToast = jest.fn(); // If Steam used toast, separate from PSN
+  const mockPsnToast = jest.fn();
+
   beforeEach(() => {
-    fetchMock.resetMocks();
+    (global.fetch as jest.Mock).mockClear();
+    localStorageMock.clear(); // Clears all localStorage mocks
+    // jest.clearAllMocks(); // This would clear fetch, localStorage spies, toast mocks etc.
+
+    // Reset specific context mocks
     mockClearSteamConnection.mockClear();
     mockCheckUserSession.mockClear();
     mockFetchSteamProfile.mockClear();
+
+    // Reset toast mock for PSN before each test
+    (useToast as jest.Mock).mockReturnValue({ toast: mockPsnToast });
+    mockPsnToast.mockClear();
 
     // Mock window.location.href assignment
     delete window.location;
@@ -164,7 +208,7 @@ describe('PlatformConnections Component (Passport Flow)', () => {
     fireEvent.click(disconnectButton);
 
     await waitFor(() => {
-        expect(fetchMock).toHaveBeenCalledWith('/auth/logout');
+        expect(global.fetch).toHaveBeenCalledWith('/auth/logout');
     });
     // Check if error message is displayed (localSteamError)
     expect(await screen.findByText(/Logout failed on the server/i)).toBeInTheDocument();
@@ -172,4 +216,146 @@ describe('PlatformConnections Component (Passport Flow)', () => {
     expect(mockClearSteamConnection).toHaveBeenCalled();
   });
 
+  // PSN Integration Tests
+  describe('PlayStation Network Connection', () => {
+    it('renders PSN connection UI with input and button', () => {
+      renderWithMockedContext(<PlatformConnections />, {});
+      const psnCard = screen.getByText('PlayStation Network').closest('div.relative');
+      expect(psnCard).toBeInTheDocument();
+      if (!psnCard) return;
+
+      expect(within(psnCard).getByLabelText(/NPSSO Token/i)).toBeInTheDocument();
+      expect(within(psnCard).getByRole('button', { name: /Connect to PSN/i })).toBeInTheDocument();
+    });
+
+    it('shows an error if NPSSO token is empty on PSN connect submit', async () => {
+      renderWithMockedContext(<PlatformConnections />, {});
+      const psnCard = screen.getByText('PlayStation Network').closest('div.relative');
+      if (!psnCard) return;
+
+      fireEvent.click(within(psnCard).getByRole('button', { name: /Connect to PSN/i }));
+
+      expect(await within(psnCard).findByText(/NPSSO token cannot be empty./i)).toBeInTheDocument();
+      expect(mockPsnToast).toHaveBeenCalledWith(expect.objectContaining({
+        title: 'Error',
+        description: 'NPSSO token cannot be empty.',
+        variant: 'destructive'
+      }));
+    });
+
+    it('handles successful PSN authentication flow', async () => {
+      (global.fetch as jest.Mock)
+        .mockResolvedValueOnce({ // For /api/psn/initiate-auth
+          ok: true,
+          json: async () => ({ accessCode: 'mockAccessCode' }),
+        } as Response)
+        .mockResolvedValueOnce({ // For /api/psn/exchange-code
+          ok: true,
+          json: async () => ({
+            authorization: { accessToken: 'mockPsnAccessToken', refreshToken: 'mockPsnRefreshToken', expiresIn: 3600 }
+          }),
+        } as Response);
+
+      renderWithMockedContext(<PlatformConnections />, {});
+      const psnCard = screen.getByText('PlayStation Network').closest('div.relative');
+      if (!psnCard) return;
+
+      fireEvent.change(within(psnCard).getByLabelText(/NPSSO Token/i), { target: { value: 'testNpssoToken' } });
+      fireEvent.click(within(psnCard).getByRole('button', { name: /Connect to PSN/i }));
+
+      await waitFor(() => {
+        expect(mockPsnToast).toHaveBeenCalledWith(expect.objectContaining({
+          title: 'Step 1 Complete',
+        }));
+      });
+      await waitFor(() => {
+        expect(mockPsnToast).toHaveBeenCalledWith(expect.objectContaining({
+          title: 'PSN Authentication Successful!',
+        }));
+      });
+
+      expect(localStorageMock.setItem).toHaveBeenCalledWith('psnAuthToken', 'mockPsnAccessToken');
+      expect(await within(psnCard).findByText(/Successfully connected to PSN!/i)).toBeInTheDocument();
+      expect(within(psnCard).getByRole('button', { name: /Disconnect PSN/i })).toBeInTheDocument();
+    });
+
+    it('handles failure during NPSSO exchange for PSN', async () => {
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        json: async () => ({ error: 'PSN NPSSO exchange failed' }),
+      } as Response);
+
+      renderWithMockedContext(<PlatformConnections />, {});
+      const psnCard = screen.getByText('PlayStation Network').closest('div.relative');
+      if (!psnCard) return;
+
+      fireEvent.change(within(psnCard).getByLabelText(/NPSSO Token/i), { target: { value: 'testNpssoToken' } });
+      fireEvent.click(within(psnCard).getByRole('button', { name: /Connect to PSN/i }));
+
+      await waitFor(() => {
+        expect(mockPsnToast).toHaveBeenCalledWith(expect.objectContaining({
+          title: 'Authentication Error',
+          description: 'PSN NPSSO exchange failed',
+          variant: 'destructive'
+        }));
+      });
+      expect(await within(psnCard).findByText(/PSN NPSSO exchange failed/i)).toBeInTheDocument();
+    });
+
+    it('handles failure during access code exchange for PSN', async () => {
+      (global.fetch as jest.Mock)
+        .mockResolvedValueOnce({ // Successful /api/psn/initiate-auth
+          ok: true,
+          json: async () => ({ accessCode: 'mockAccessCode' }),
+        } as Response)
+        .mockResolvedValueOnce({ // Failed /api/psn/exchange-code
+          ok: false,
+          status: 500,
+          json: async () => ({ error: 'PSN token exchange failed' }),
+        } as Response);
+
+      renderWithMockedContext(<PlatformConnections />, {});
+      const psnCard = screen.getByText('PlayStation Network').closest('div.relative');
+      if (!psnCard) return;
+
+      fireEvent.change(within(psnCard).getByLabelText(/NPSSO Token/i), { target: { value: 'testNpssoToken' } });
+      fireEvent.click(within(psnCard).getByRole('button', { name: /Connect to PSN/i }));
+
+      await waitFor(() => expect(mockPsnToast).toHaveBeenCalledWith(expect.objectContaining({ title: 'Step 1 Complete' })));
+      await waitFor(() => {
+        expect(mockPsnToast).toHaveBeenCalledWith(expect.objectContaining({
+          title: 'Authentication Error',
+          description: 'PSN token exchange failed',
+          variant: 'destructive'
+        }));
+      });
+      expect(await within(psnCard).findByText(/PSN token exchange failed/i)).toBeInTheDocument();
+    });
+
+    it('handles PSN disconnection', async () => {
+       // First, simulate successful connection
+      (global.fetch as jest.Mock)
+        .mockResolvedValueOnce({ ok: true, json: async () => ({ accessCode: 'mockAccessCode' }) } as Response)
+        .mockResolvedValueOnce({ ok: true, json: async () => ({ authorization: { accessToken: 'mockPsnAccessToken' } }) } as Response);
+
+      renderWithMockedContext(<PlatformConnections />, {});
+      const psnCard = screen.getByText('PlayStation Network').closest('div.relative');
+      if (!psnCard) return;
+
+      fireEvent.change(within(psnCard).getByLabelText(/NPSSO Token/i), { target: { value: 'testNpssoToken' } });
+      fireEvent.click(within(psnCard).getByRole('button', { name: /Connect to PSN/i }));
+      await waitFor(() => expect(within(psnCard).getByRole('button', { name: /Disconnect PSN/i })).toBeInTheDocument());
+
+      // Now, test disconnection
+      fireEvent.click(within(psnCard).getByRole('button', { name: /Disconnect PSN/i }));
+
+      expect(localStorageMock.removeItem).toHaveBeenCalledWith('psnAuthToken');
+      expect(mockPsnToast).toHaveBeenCalledWith(expect.objectContaining({
+        title: 'PSN Disconnected',
+      }));
+      expect(within(psnCard).getByRole('button', { name: /Connect to PSN/i })).toBeInTheDocument();
+      expect(within(psnCard).queryByText(/Successfully connected to PSN!/i)).not.toBeInTheDocument();
+    });
+  });
 });

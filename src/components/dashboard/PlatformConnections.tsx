@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { useToast } from "@/components/ui/use-toast"; // Added for PSN
 import { Plug, CheckCircle, XCircle, ExternalLink, Settings, Gamepad2 } from "lucide-react"; // Import Gamepad2
 
 interface Platform {
@@ -63,6 +64,16 @@ const platforms: Platform[] = [
     requiredCredentials: ['Client ID', 'Client Secret'],
     icon: '🟣',
     color: 'bg-purple-600'
+  },
+  {
+    id: 'psn',
+    name: 'PlayStation Network',
+    description: 'Connect your PSN account using your NPSSO token to sync games and trophies.',
+    connected: false,
+    apiDocUrl: 'https://psn-api.achievements.app/authentication/authenticating-manually#how-to-obtain-an-npsso',
+    requiredCredentials: ['NPSSO Token'],
+    icon: '🔵', // Placeholder icon
+    color: 'bg-blue-700'
   }
 ];
 
@@ -90,6 +101,14 @@ export const PlatformConnections = () => {
   const [localSteamError, setLocalSteamError] = useState<string | null>(null);
   const [gogIdInput, setGogIdInput] = useState<string>("");
   const [xuidInput, setXuidInput] = useState<string>(""); // For XUID input
+
+  // PSN State
+  const [npsso, setNpsso] = useState<string>('');
+  const [psnIsLoading, setPsnIsLoading] = useState<boolean>(false);
+  const [psnError, setPsnError] = useState<string | null>(null);
+  // const [psnAccessCode, setPsnAccessCode] = useState<string | null>(null); // Not strictly needed if directly exchanged
+  const [psnAuthorization, setPsnAuthorization] = useState<any | null>(null);
+  const { toast } = useToast(); // For PSN user feedback
 
   // GOG Context
   const {
@@ -154,13 +173,100 @@ export const PlatformConnections = () => {
           return { ...p, connected: !!gogUserId };
         }
         if (p.id === 'xbox') {
-          // Xbox is connected if there are games and no error
           return { ...p, connected: xboxGames.length > 0 && !errorXbox };
+        }
+        if (p.id === 'psn') {
+          // Check if psnAuthToken exists in localStorage to determine connected status initially
+          const psnAuthToken = localStorage.getItem('psnAuthToken');
+          return { ...p, connected: !!psnAuthorization || !!psnAuthToken };
         }
         return p;
       })
     );
-  }, [isAuthenticated, gogUserId, xboxGames, errorXbox]); // Add Xbox dependencies
+  }, [isAuthenticated, gogUserId, xboxGames, errorXbox, psnAuthorization]);
+
+
+  // PSN Handlers (adapted from PsnConnections.tsx)
+  const handlePsnInitiateAuth = async () => {
+    if (!npsso.trim()) {
+      setPsnError('NPSSO token cannot be empty.');
+      toast({ title: 'Error', description: 'NPSSO token cannot be empty.', variant: 'destructive' });
+      return;
+    }
+    setPsnIsLoading(true);
+    setPsnError(null);
+    // setPsnAccessCode(null); // Not storing access code in state for long
+    setPsnAuthorization(null); // Reset previous authorization
+
+    try {
+      const response = await fetch('/api/psn/initiate-auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ npsso }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || `HTTP error! status: ${response.status}`);
+      }
+      // setPsnAccessCode(data.accessCode);
+      toast({ title: 'Step 1 Complete', description: 'NPSSO exchanged for access code. Now exchanging for auth tokens.' });
+      await handlePsnExchangeCode(data.accessCode);
+    } catch (err: any) {
+      console.error('Error initiating PSN auth:', err);
+      const errorMessage = err.message || 'Failed to initiate PSN authentication.';
+      setPsnError(errorMessage);
+      toast({ title: 'Authentication Error', description: errorMessage, variant: 'destructive' });
+      setPsnIsLoading(false); // Ensure loading is false on error here
+    }
+    // setIsLoading is managed by the final step in handlePsnExchangeCode or error above
+  };
+
+  const handlePsnExchangeCode = async (accessCode: string) => {
+    if (!accessCode) {
+      setPsnError('Access code is missing.');
+      toast({ title: 'Error', description: 'Access code is missing.', variant: 'destructive' });
+      setPsnIsLoading(false);
+      return;
+    }
+    // setPsnIsLoading(true) // Already true from handlePsnInitiateAuth
+
+    try {
+      const response = await fetch('/api/psn/exchange-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accessCode }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || `HTTP error! status: ${response.status}`);
+      }
+      setPsnAuthorization(data.authorization);
+      localStorage.setItem('psnAuthToken', data.authorization.accessToken);
+      // localStorage.setItem('psnRefreshToken', data.authorization.refreshToken); // If needed later
+      // localStorage.setItem('psnTokenExpiry', Date.now() + data.authorization.expiresIn * 1000); // If needed later
+      toast({ title: 'PSN Authentication Successful!', description: 'Access and refresh tokens obtained.' });
+      setPsnError(null);
+      setNpsso(''); // Clear NPSSO input on success
+    } catch (err: any) {
+      console.error('Error exchanging access code for auth tokens:', err);
+      const errorMessage = err.message || 'Failed to exchange access code for auth tokens.';
+      setPsnError(errorMessage);
+      toast({ title: 'Authentication Error', description: errorMessage, variant: 'destructive' });
+      setPsnAuthorization(null);
+    } finally {
+      setPsnIsLoading(false);
+    }
+  };
+
+  const handlePsnDisconnect = () => {
+    localStorage.removeItem('psnAuthToken');
+    // localStorage.removeItem('psnRefreshToken');
+    // localStorage.removeItem('psnTokenExpiry');
+    setPsnAuthorization(null);
+    setPsnError(null);
+    setNpsso('');
+    toast({ title: 'PSN Disconnected', description: 'Your PSN connection details have been cleared.' });
+  };
 
 
   const handleSteamAuthRedirect = () => {
@@ -225,6 +331,7 @@ export const PlatformConnections = () => {
           const isSteam = platform.id === 'steam';
           const isGog = platform.id === 'gog';
           const isXbox = platform.id === 'xbox';
+          const isPsn = platform.id === 'psn';
 
           // Determine connected status
           let isPlatformConnected = platform.connected; // Uses the derived value from useEffect
@@ -234,9 +341,11 @@ export const PlatformConnections = () => {
             isPlatformConnected = !!gogUserId && !isLoadingGogUserId;
           } else if (isXbox) {
             isPlatformConnected = xboxGames.length > 0 && !isLoadingXbox && !errorXbox;
+          } else if (isPsn) {
+            isPlatformConnected = !!psnAuthorization || !!localStorage.getItem('psnAuthToken');
           }
 
-          const platformIcon = isXbox ? <Gamepad2 className="h-6 w-6" /> : <span className="text-2xl">{platform.icon}</span>;
+          const platformIcon = isXbox ? <Gamepad2 className="h-6 w-6" /> : isPsn ? <Gamepad2 className="h-6 w-6" /> : <span className="text-2xl">{platform.icon}</span>;
 
           return (
             <Card key={platform.id} className="relative">
@@ -266,6 +375,8 @@ export const PlatformConnections = () => {
                     : isGog && isLoadingGogUserId ? 'Verifying GOG connection...'
                     : isXbox && isPlatformConnected ? `Xbox Connected (${xboxGames.length} games loaded). `
                     : isXbox && isLoadingXbox ? 'Loading Xbox games...'
+                    : isPsn && isPlatformConnected ? 'PSN Connected. Ready to sync library and trophies.'
+                    : isPsn && psnIsLoading ? 'Connecting to PSN...'
                     : platform.description}
                   {isSteam && contextSteamUser && (
                     <a href={contextSteamUser.profileUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline ml-1">View Profile</a>
@@ -279,6 +390,9 @@ export const PlatformConnections = () => {
                 )}
                 {(isXbox && errorXbox) && (
                   <p className="text-sm text-red-500 bg-red-100 p-2 rounded mt-1">{errorXbox}</p>
+                )}
+                {(isPsn && psnError) && (
+                  <p className="text-sm text-red-500 bg-red-100 p-2 rounded mt-1">{psnError}</p>
                 )}
               </CardHeader>
               
@@ -401,8 +515,45 @@ export const PlatformConnections = () => {
                   </div>
                 )}
 
-                {/* UI for other platforms (non-Steam, non-GOG, non-Xbox) */}
-                {!isSteam && !isGog && !isXbox && (
+                {isPsn && (
+                  <div className="space-y-3">
+                    {isPlatformConnected ? (
+                      <div className="flex flex-col items-center space-y-2">
+                        <p className="text-sm text-green-600">Successfully connected to PSN!</p>
+                        <p className="text-xs text-muted-foreground">You can now sync your PSN library and trophies from the dashboard.</p>
+                        <Button onClick={handlePsnDisconnect} variant="outline" className="w-full">
+                          <XCircle className="h-4 w-4 mr-2" /> Disconnect PSN
+                        </Button>
+                      </div>
+                    ) : (
+                      <>
+                        <p className="text-xs text-muted-foreground">
+                          To connect, get your NPSSO token by following the instructions {' '}
+                          <a href="https://psn-api.achievements.app/authentication/authenticating-manually#how-to-obtain-an-npsso" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">here</a>.
+                        </p>
+                        <div className="space-y-2">
+                          <Label htmlFor="npsso-platform">NPSSO Token</Label>
+                          <Input
+                            id="npsso-platform"
+                            type="password"
+                            value={npsso}
+                            onChange={(e) => setNpsso(e.target.value)}
+                            placeholder="Enter your NPSSO token"
+                            disabled={psnIsLoading}
+                            className="mt-1"
+                          />
+                        </div>
+                        <Button onClick={handlePsnInitiateAuth} className="w-full" disabled={psnIsLoading || !npsso.trim()}>
+                          <Plug className="h-4 w-4 mr-2" />
+                          {psnIsLoading ? 'Connecting...' : 'Connect to PSN'}
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {/* UI for other platforms (non-Steam, non-GOG, non-Xbox, non-PSN) */}
+                {!isSteam && !isGog && !isXbox && !isPsn && (
                   <>
                     <div>
                       <h4 className="text-sm font-medium mb-2">Required Credentials:</h4>
@@ -490,11 +641,12 @@ export const PlatformConnections = () => {
               if (p.id === 'steam') return isAuthenticated;
               if (p.id === 'gog') return !!gogUserId;
               if (p.id === 'xbox') return xboxGames.length > 0 && !errorXbox;
+              if (p.id === 'psn') return !!psnAuthorization || !!localStorage.getItem('psnAuthToken');
               return p.connected;
             }).map((platform) => (
               <div key={platform.id} className="space-y-2">
                 <div className="flex items-center space-x-2">
-                  {platform.id === 'xbox' ? <Gamepad2 className="h-5 w-5" /> : <div className="text-lg">{platform.icon}</div>}
+                  {platform.id === 'xbox' || platform.id === 'psn' ? <Gamepad2 className="h-5 w-5" /> : <div className="text-lg">{platform.icon}</div>}
                   <span className="font-medium">{platform.name}</span>
                 </div>
                 <div className="text-sm text-muted-foreground space-y-1">
@@ -517,7 +669,12 @@ export const PlatformConnections = () => {
                 {platform.id === 'xbox' && xboxGames.length > 0 && !errorXbox && (
                   <div className="text-xs p-2 bg-green-50 rounded border border-green-200">
                     <p className="font-medium">Xbox Games: {xboxGames.length}</p>
-                    {/* Display XUID if it were stored, for now, it's in xuidInput if user typed it */}
+                  </div>
+                )}
+                {platform.id === 'psn' && (!!psnAuthorization || !!localStorage.getItem('psnAuthToken')) && (
+                  <div className="text-xs p-2 bg-blue-50 rounded border border-blue-200">
+                    <p className="font-medium">PSN Connected</p>
+                    <p>Token stored locally.</p>
                   </div>
                 )}
               </div>
@@ -526,6 +683,7 @@ export const PlatformConnections = () => {
                if (p.id === 'steam') return !isAuthenticated;
                if (p.id === 'gog') return !gogUserId;
                if (p.id === 'xbox') return !(xboxGames.length > 0 && !errorXbox);
+               if (p.id === 'psn') return !(!!psnAuthorization || !!localStorage.getItem('psnAuthToken'));
                return !p.connected;
              }).length === platformsState.length && (
               <p className="text-muted-foreground col-span-full">No platforms connected yet.</p>

@@ -6,7 +6,6 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter, CardDescription } from '@/components/ui/card';
 import { toast } from '@/components/ui/sonner';
 import { useAuth } from '@/contexts/AuthContext';
-import PsnConnections from '@/components/dashboard/PsnConnections'; // Added import
 
 const ConfigurationPage: React.FC = () => {
   const [currentPassword, setCurrentPassword] = useState('');
@@ -112,16 +111,6 @@ const ConfigurationPage: React.FC = () => {
               <p className="text-lg text-gray-900 p-2 border-b">{displayEmail}</p>
             </div>
             {/* Add more profile information here if needed */}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>PlayStation Network</CardTitle>
-            <CardDescription>Connect your PSN account to sync your games and trophies.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <PsnConnections />
           </CardContent>
         </Card>
 
