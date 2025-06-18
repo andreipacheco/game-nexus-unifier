@@ -130,10 +130,14 @@ export const GameLibrary = ({ selectedPlatform, onPlatformChange, onGamesUpdate 
 
   // useEffect to call onGamesUpdate when game data changes
   useEffect(() => {
+    const safeSteamGames = Array.isArray(steamGames) ? steamGames : [];
+    const safeGogGames = Array.isArray(gogGames) ? gogGames : [];
+    const safeXboxGames = Array.isArray(xboxGamesFromContext) ? xboxGamesFromContext : [];
+
     const currentAllGames = [
-      ...(steamGames.map(steamGameToGameType).filter(Boolean) as Game[]),
-      ...(gogGames.map(gogGameToGameType).filter(Boolean) as Game[]),
-      ...(xboxGamesFromContext.map(mapXboxGameToGenericGame).filter(Boolean) as Game[])
+      ...(safeSteamGames.map(steamGameToGameType).filter(Boolean) as Game[]),
+      ...(safeGogGames.map(gogGameToGameType).filter(Boolean) as Game[]),
+      ...(safeXboxGames.map(mapXboxGameToGenericGame).filter(Boolean) as Game[])
     ];
     setInternalAllGames(currentAllGames);
 
