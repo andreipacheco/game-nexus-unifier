@@ -79,13 +79,25 @@ export const GameLibrary = ({ selectedPlatform, onPlatformChange }: GameLibraryP
         })
         .then((data: Game[] | { message: string }) => { // Type check for error message from API
           if (Array.isArray(data)) {
-            setAllGamesFromDb(data);
+            const gamesFromApi = data;
+            const nonPsnMockGames = mockGameData.filter(game => game.platform !== 'psn');
+
+            // Deduplication: Prioritize API games.
+            // Assumes game.id is a reliable unique identifier across sources for this deduplication.
+            const gamesMap = new Map<string, Game>();
+            nonPsnMockGames.forEach(game => gamesMap.set(game.id, game)); // Add non-PSN mock games first
+            gamesFromApi.forEach(game => gamesMap.set(game.id, game));    // Then add/overwrite with API games
+
+            const finalCombinedGames = Array.from(gamesMap.values());
+            setAllGamesFromDb(finalCombinedGames);
+            setAllGamesError(null); // Clear any previous error state if API call succeeded
+
           } else if (data && typeof data.message === 'string') {
             // Handle cases where API returns a message (e.g., "Forbidden", "No games found")
+            // This typically means the API call was successful but there's no data or a specific condition.
             console.warn("Message from /api/user/:userId/games:", data.message);
-            setAllGamesFromDb([]); // Set to empty array if a message is received
-            // Optionally set a specific error message for the user
-            // setAllGamesError(`Note: ${data.message}`);
+            setAllGamesFromDb([]); // Set to empty array if a message (like "No games found") is received
+            setAllGamesError(null); // Not an error, but a state like "no games"
           } else {
             // Handle unexpected response structure
             console.error("Unexpected data structure from /api/user/:userId/games:", data);
