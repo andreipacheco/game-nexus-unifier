@@ -6,6 +6,7 @@ import { Game } from '@/data/mockGameData';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSteam } from '@/contexts/SteamContext';
 import { useGog } from '@/contexts/GogContext';
+import { useXbox } from '@/contexts/XboxContext'; // Import useXbox
 // import fetchMock from 'jest-fetch-mock'; // fetch is globally mocked
 
 // Define SteamUserProfile for mockSteamProfile if needed for explicit typing
@@ -44,10 +45,12 @@ jest.mock('./GameCard', () => ({
 const mockUseAuth = useAuth as jest.Mock;
 const mockUseSteam = useSteam as jest.Mock;
 const mockUseGog = useGog as jest.Mock;
+const mockUseXbox = useXbox as jest.Mock; // Added mock for useXbox
 
 jest.mock('@/contexts/AuthContext');
 jest.mock('@/contexts/SteamContext');
 jest.mock('@/contexts/GogContext');
+jest.mock('@/contexts/XboxContext'); // Mock the Xbox context
 
 // Mock localStorage for psnAuthToken check
 const localStorageMock = (() => {
@@ -79,10 +82,11 @@ describe('GameLibrary Component - Refactored Data Flow', () => {
     localStorageMock.clear();
 
     // Default mock implementations
-    mockUseAuth.mockReturnValue({ user: { id: 'testUserId' }, isAuthenticated: true }); // Ensure user.id is available
-    mockUseSteam.mockReturnValue({ steamId: 'testSteamId', steamUser: { personaName: 'SteamUser' } }); // For filter button visibility
-    mockUseGog.mockReturnValue({ gogUserId: 'testGogId' }); // For filter button visibility
-    localStorageMock.setItem('psnAuthToken', 'testPsnToken'); // Assume PSN connected for filter button
+    mockUseAuth.mockReturnValue({ user: { id: 'testUserId' }, isAuthenticated: true });
+    mockUseSteam.mockReturnValue({ steamId: 'testSteamId', steamUser: { personaName: 'SteamUser' } });
+    mockUseGog.mockReturnValue({ gogUserId: 'testGogId' });
+    mockUseXbox.mockReturnValue({ xuid: null, errorXbox: null, isLoadingXbox: false }); // Default Xbox not connected
+    localStorageMock.setItem('psnAuthToken', 'testPsnToken');
   });
 
   it('fetches and displays games from the consolidated endpoint', async () => {
@@ -125,6 +129,36 @@ describe('GameLibrary Component - Refactored Data Flow', () => {
     await waitFor(() => expect(screen.queryByText(/Loading all games/i)).not.toBeInTheDocument());
 
     expect(screen.getByRole('button', { name: /PlayStation/i })).toBeInTheDocument();
+  });
+
+  describe('Xbox Platform Filter Visibility', () => {
+    it('shows Xbox filter button when Xbox is connected (via context) even if no Xbox games from DB', async () => {
+      mockUseXbox.mockReturnValue({ xuid: 'testXboxUser', errorXbox: null, isLoadingXbox: false });
+      (global.fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () =>
+        mockPlatformGames.filter(game => game.platform !== 'xbox') // Return games, but no Xbox ones
+      });
+      render(<GameLibrary selectedPlatform="all" onPlatformChange={jest.fn()} />);
+      await waitFor(() => expect(screen.queryByText(/Loading all games/i)).not.toBeInTheDocument());
+      expect(screen.getByRole('button', { name: /Xbox/i })).toBeInTheDocument();
+    });
+
+    it('does not show Xbox filter button when Xbox not connected and no Xbox games from DB', async () => {
+      mockUseXbox.mockReturnValue({ xuid: null, errorXbox: null, isLoadingXbox: false });
+      (global.fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () =>
+        mockPlatformGames.filter(game => game.platform !== 'xbox')
+      });
+      render(<GameLibrary selectedPlatform="all" onPlatformChange={jest.fn()} />);
+      await waitFor(() => expect(screen.queryByText(/Loading all games/i)).not.toBeInTheDocument());
+      expect(screen.queryByRole('button', { name: /Xbox/i })).not.toBeInTheDocument();
+    });
+
+    it('shows Xbox filter button when Xbox not connected via context BUT Xbox games are present in DB', async () => {
+      mockUseXbox.mockReturnValue({ xuid: null, errorXbox: null, isLoadingXbox: false });
+      (global.fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => mockPlatformGames }); // Includes Xbox games
+      render(<GameLibrary selectedPlatform="all" onPlatformChange={jest.fn()} />);
+      await waitFor(() => expect(screen.queryByText(/Loading all games/i)).not.toBeInTheDocument());
+      expect(screen.getByRole('button', { name: /Xbox/i })).toBeInTheDocument();
+    });
   });
 
   it('filters for PSN games when PlayStation filter is selected', async () => {

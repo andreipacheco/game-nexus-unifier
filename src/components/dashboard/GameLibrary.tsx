@@ -42,8 +42,8 @@ interface GameLibraryProps {
 
 import { useSteam } from "@/contexts/SteamContext"; // Still needed for platformFilters logic
 import { useGog } from "@/contexts/GogContext";     // Still needed for platformFilters logic
-// import { useXbox } from "@/contexts/XboxContext"; // Xbox data will come from unified endpoint
-// import type { XboxGame } from "@/contexts/XboxContext"; // No longer needed here
+import { useXbox } from "@/contexts/XboxContext";   // Reinstated for Xbox connection status
+// import type { XboxGame } from "@/contexts/XboxContext"; // No longer needed here if not processing games
 
 // REMOVED: steamGameToGameType, gogGameToGameType, mapXboxGameToGenericGame helpers
 
@@ -54,7 +54,7 @@ export const GameLibrary = ({ selectedPlatform, onPlatformChange }: GameLibraryP
 
   const { steamId, steamUser } = useSteam(); // For platformFilters status
   const { gogUserId } = useGog();         // For platformFilters status
-  // const { xboxGames: xboxGamesFromContext, isLoading: isLoadingXbox, error: errorXbox } = useXbox(); // Data now from DB
+  const { xuid: xboxXuid, errorXbox, isLoadingXbox } = useXbox(); // Get Xbox connection status from context
 
   const [searchTerm, setSearchTerm] = useState("");
   const [allGamesFromDb, setAllGamesFromDb] = useState<Game[]>([]);
@@ -152,23 +152,16 @@ export const GameLibrary = ({ selectedPlatform, onPlatformChange }: GameLibraryP
     }))
   ].filter(f => {
       if (f.key === 'all') return true;
-      if (f.count > 0) return true;
       // Show filter if the user is connected to the platform, even if count is 0 initially
       if (f.key === 'steam' && steamId && steamUser) return true;
       if (f.key === 'gog' && gogUserId) return true;
-      if (f.key === 'xbox' && xboxGamesFromContext.length > 0) return true; // Show if connected, even if 0 games after filter
-      // Or, more simply, always show if platform is in platformInfo and user is "connected"
-      // For Xbox, "connected" means xboxGamesFromContext exists and no error, handled by context
-      if (f.key === 'xbox' /* && xbox connected status from context/localStorage if available */) {
-        // Check if there's any Xbox game in allGames, or rely on PlatformConnections for actual connection status display
-        return allGames.some(game => game.platform?.toLowerCase() === 'xbox') || !!localStorage.getItem('xboxToken'); // Example for Xbox token
-      }
-      if (f.key === 'psn' && !!localStorage.getItem('psnAuthToken')) return true;
-      // Fallback: only show if games exist for the platform or it's 'all'
-      // This might hide platforms user is connected to but has 0 games synced yet.
-      // A better approach might be to get connection statuses from contexts or a dedicated API endpoint.
-      // For now, we'll show if games for that platform exist in the loaded list.
-      return allGames.some(game => game.platform?.toLowerCase() === f.key);
+      // For Xbox, show if connected (xuid exists and no error) or if there are Xbox games already loaded
+      if (f.key === 'xbox' && ((xboxXuid && !errorXbox) || allGames.some(game => game.platform?.toLowerCase() === 'xbox'))) return true;
+      // For PSN, show if connected (localStorage token exists) or if there are PSN games already loaded
+      if (f.key === 'psn' && (!!localStorage.getItem('psnAuthToken') || allGames.some(game => game.platform?.toLowerCase() === 'psn'))) return true;
+      // Fallback: only show if games exist for the platform (count > 0)
+      if (f.count > 0) return true;
+      return false;
     }
   );
  // Simplified filter display logic: always show if platform is known, count will reflect games
@@ -248,10 +241,10 @@ export const GameLibrary = ({ selectedPlatform, onPlatformChange }: GameLibraryP
             <Search className="h-12 w-12 text-muted-foreground mb-4" />
             <h3 className="text-lg font-medium mb-2">No games found</h3>
             <p className="text-muted-foreground text-center">
-              {selectedPlatform === 'steam' && steamId && !steamGamesError && steamGames.length === 0 ? 'No Steam games to display or library is private.' :
-               selectedPlatform === 'gog' && gogUserId && !gogGamesError && gogGames.length === 0 ? 'No GOG games to display.' :
-               selectedPlatform === 'xbox' && !errorXbox && xboxGamesFromContext.length === 0 ? 'No Xbox games to display or profile is private.' :
-               selectedPlatform === 'psn' && !!localStorage.getItem('psnAuthToken') /* && psnGames.length === 0 (when integrated) */ ? 'No PSN games to display or library is private.' :
+              {selectedPlatform === 'steam' && steamId && allGames.filter(g=>g.platform === 'steam').length === 0 ? 'No Steam games to display or library is private.' :
+               selectedPlatform === 'gog' && gogUserId && allGames.filter(g=>g.platform === 'gog').length === 0 ? 'No GOG games to display.' :
+               selectedPlatform === 'xbox' && xboxXuid && !errorXbox && allGames.filter(g=>g.platform === 'xbox').length === 0 ? 'No Xbox games to display or profile is private.' :
+               selectedPlatform === 'psn' && !!localStorage.getItem('psnAuthToken') && allGames.filter(g=>g.platform === 'psn').length === 0 ? 'No PSN games to display or library is private.' :
                'Try adjusting your search or platform filter.'}
             </p>
           </CardContent>
