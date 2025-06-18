@@ -240,4 +240,16 @@ function configurePassport(passportInstance) {
             logger.info('Passport configured with Local, Steam, and Google Strategies (if env vars are set for OAuth).');
 }
 
-module.exports = configurePassport; // Export the function
+// Middleware to ensure user is authenticated
+function ensureAuthenticated(req, res, next) {
+  if (req.isAuthenticated()) {
+    return next();
+  }
+  logger.warn('ensureAuthenticated: User not authenticated. Access denied.', { path: req.originalUrl, ip: req.ip });
+  res.status(401).json({ message: 'User not authenticated. Please log in.' });
+}
+
+module.exports = {
+  configurePassport,
+  ensureAuthenticated
+};

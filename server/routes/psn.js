@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+console.log('[DEBUG] server/routes/psn.js: File loaded and router initialized.');
 const {
   exchangeNpssoForAccessCode,
   exchangeAccessCodeForAuthTokens,

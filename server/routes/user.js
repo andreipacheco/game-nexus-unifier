@@ -1,5 +1,12 @@
+console.log('[DEBUG] server/routes/user.js: File loaded by Node.js');
 const express = require('express');
 const router = express.Router();
+
+router.use((req, res, next) => {
+  console.log(`[DEBUG] server/routes/user.js: Router middleware hit. Method: ${req.method}, Path: ${req.path}, OriginalURL: ${req.originalUrl}`);
+  next();
+});
+
 const bcrypt = require('bcrypt');
 const User =require('../models/User'); // Import User model
 const logger = require('../config/logger');

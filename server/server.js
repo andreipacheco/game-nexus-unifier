@@ -97,8 +97,8 @@ app.use(passport.session());
 console.log('[DEBUG] server.js: Passport middleware initialized.');
 
 // Configure Passport strategies
-const configurePassport = require('./config/passportConfig'); // Added
-configurePassport(passport); // Added
+const { configurePassport } = require('./config/passportConfig'); // Changed to destructure
+configurePassport(passport); // This line remains unchanged
 
 // Define Routes
 const authRoutes = require('./routes/auth');
@@ -163,11 +163,17 @@ app.use('/api/xbox', xboxRoutes);
 logger.info('Xbox routes mounted under /api/xbox.');
 console.log('[DEBUG] server.js: Xbox routes mounted.');
 
-// Import and use PSN routes
-const psnRoutes = require('./routes/psn');
-app.use('/api/psn', psnRoutes);
-logger.info('PSN routes mounted under /api/psn.');
-console.log('[DEBUG] server.js: PSN routes mounted.');
+console.log('[DEBUG] server.js: About to require and mount PSN routes.');
+try {
+  const psnRoutes = require('./routes/psn'); // This line stays inside
+  app.use('/api/psn', psnRoutes);
+  logger.info('PSN routes mounted under /api/psn.'); // logger.info can stay
+  console.log('[DEBUG] server.js: PSN routes mounted successfully.'); // New log
+} catch (e) {
+  console.error('[DEBUG] server.js: CRITICAL ERROR mounting PSN routes:', e); // More detailed log
+  logger.error('CRITICAL ERROR mounting PSN routes:', e.message, { stack: e.stack }); // Log error object too
+}
+console.log('[DEBUG] server.js: PSN routes section complete. Proceeding to main().');
 
 console.log('[DEBUG] server.js: Core routes defined.');
 
