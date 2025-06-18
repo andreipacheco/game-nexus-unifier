@@ -109,11 +109,11 @@ export const GameLibrary = ({ selectedPlatform, onPlatformChange }: GameLibraryP
   const allGames = allGamesFromDb; // Use data fetched from the database
 
   const currentPlatformInfo: PlatformInfo = {
-    ...platformInfo, // This should ideally include Steam, GOG, Xbox, PSN with icons
-    steam: { name: 'Steam', color: '#1b2838', icon: () => <Gamepad2 /> }, // Placeholder icon
-    gog: { name: 'GOG', color: '#7b2f8a', icon: () => <Gamepad2 /> },     // Placeholder icon
-    xbox: { name: 'Xbox', color: '#107c10', icon: () => <Gamepad2 /> },    // Placeholder icon
-    psn: { name: 'PlayStation', color: '#003087', icon: () => <Gamepad2 /> }
+    ...platformInfo,
+    // Ensure platformInfo from mockGameData.ts provides the necessary icons and names
+    // For example, if platformInfo.steam.icon is a string, it needs to be handled appropriately
+    // or mockGameData.ts needs to provide JSX elements for icons if that's what GameCard expects.
+    // For now, assuming platformInfo provides compatible structures or this component adapts.
   };
 
   const SsearchTermLowerCase = searchTerm.toLowerCase(); // Pre-calculate for efficiency

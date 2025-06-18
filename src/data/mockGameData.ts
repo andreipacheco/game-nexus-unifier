@@ -3,7 +3,7 @@ export interface Game {
   id: string;
   appId?: string;
   title: string;
-  platform: 'steam' | 'epic' | 'xbox' | 'gog';
+  platform: 'steam' | 'epic' | 'xbox' | 'gog' | 'psn';
   coverImage: string;
   playtime: number; // in hours
   lastPlayed: string;
@@ -87,5 +87,6 @@ export const platformInfo = {
   steam: { name: 'Steam', color: 'bg-blue-600', icon: '🟦' },
   epic: { name: 'Epic Games', color: 'bg-gray-800', icon: '⚫' },
   xbox: { name: 'Xbox', color: 'bg-green-600', icon: '🟢' },
-  gog: { name: 'GOG', color: 'bg-purple-600', icon: '🟣' }
+  gog: { name: 'GOG', color: 'bg-purple-600', icon: '🟣' },
+  psn: { name: 'PlayStation', color: '#003087', icon: '🎮' }
 };
