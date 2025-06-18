@@ -86,8 +86,6 @@ router.post('/change-password', ensureAuthenticated, async (req, res) => {
   }
 });
 
-module.exports = router;
-
 // GET /api/user/:userId/games - Fetches all games for a user from the database
 router.get('/:userId/games', ensureAuthenticated, async (req, res) => {
   try {
@@ -159,3 +157,5 @@ router.get('/:userId/games', ensureAuthenticated, async (req, res) => {
     res.status(500).json({ message: 'An error occurred while fetching games.' });
   }
 });
+
+module.exports = router;
