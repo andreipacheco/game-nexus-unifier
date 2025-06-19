@@ -27,6 +27,19 @@ const UserSchema = new mongoose.Schema({
     unique: true,
     sparse: true, // Allows multiple documents to have null/undefined for this field if not provided
   },
+  npsso: {
+    type: String,
+    unique: true,
+    sparse: true,
+  },
+  psnAccountId: {
+    type: String,
+    sparse: true,
+  },
+  psnOnlineId: {
+    type: String,
+    sparse: true,
+  },
   personaName: {
     type: String,
     trim: true,

@@ -1,5 +1,6 @@
 import React from 'react';
 import { Toaster } from "@/components/ui/toaster";
+import { PsnProvider } from "./contexts/PsnContext"; // New import
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -85,9 +86,10 @@ const App = () => (
       <SteamProvider>
         <GogProvider>
           <XboxProvider>
-            <TooltipProvider>
-              <Toaster />
-              <Sonner />
+            <PsnProvider> {/* Add PsnProvider here */}
+              <TooltipProvider>
+                <Toaster />
+                <Sonner />
               <BrowserRouter>
                 <AppRoutes /> {/* Use the new AppRoutes component */}
               </BrowserRouter>
