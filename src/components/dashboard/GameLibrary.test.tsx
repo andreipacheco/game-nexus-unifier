@@ -2,7 +2,7 @@ import React from 'react';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { GameLibrary } from './GameLibrary';
-import { Game } from '@/data/mockGameData'; // Assuming Game type is exported
+import { Game } from '@/types/gameTypes'; // Assuming Game type is exported
 import { useSteam } from '@/contexts/SteamContext'; // Import useSteam
 import fetchMock from 'jest-fetch-mock';
 
