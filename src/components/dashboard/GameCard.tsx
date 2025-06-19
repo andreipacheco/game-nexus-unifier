@@ -2,7 +2,8 @@ import { useState } from "react";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Game, platformInfo } from "@/data/mockGameData";
+import { Game } from "@/types/gameTypes";
+import { platformInfo } from "@/config/platformConfig";
 // ListChecks removed as Trophy is used instead for View Achievements button
 import { Clock, Trophy, Play, Download, MoreVertical } from "lucide-react";
 import { AspectRatio } from "@/components/ui/aspect-ratio";

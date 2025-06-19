@@ -3,7 +3,9 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"; // Added CardHeader, CardTitle, CardDescription
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Game, platformInfo, PlatformInfo } from "@/data/mockGameData"; // Added PlatformInfo
+import { Game } from "@/types/gameTypes";
+import { platformInfo } from "@/config/platformConfig";
+type PlatformInfo = typeof platformInfo;
 import { Clock, Trophy, Play, Download, Search, AlertTriangle, Loader2 } from "lucide-react"; // Added AlertTriangle, Loader2
 import { Input } from "@/components/ui/input";
 import { GameCard } from "./GameCard";
