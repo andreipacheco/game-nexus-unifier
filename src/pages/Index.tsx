@@ -56,10 +56,8 @@ const Index = () => {
         const errorData = await response.json().catch(() => ({})); // Try to parse error, default if not parsable
         throw new Error(errorData.error || `Error fetching Steam games: ${response.status}`);
       }
-      // The backend for Steam returns { games: [], count: number }
-      // Ensure we are setting steamGames to data.games
       const data = await response.json();
-      setSteamGames(data?.games || []); // Adjusted to access data.games
+      setSteamGames(data || []); // Process data as a direct array
     } catch (err) {
       console.error("Error fetching Steam games:", err);
       setSteamGamesError(err instanceof Error ? err : new Error('Failed to fetch Steam games'));
