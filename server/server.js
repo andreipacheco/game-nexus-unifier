@@ -163,6 +163,12 @@ app.use('/api/xbox', xboxRoutes);
 logger.info('Xbox routes mounted under /api/xbox.');
 console.log('[DEBUG] server.js: Xbox routes mounted.');
 
+// Import and use PSN routes
+const psnRoutes = require('./routes/psn');
+app.use('/api/psn', psnRoutes);
+logger.info('PSN routes mounted under /api/psn.');
+console.log('[DEBUG] server.js: PSN routes mounted.');
+
 console.log('[DEBUG] server.js: Core routes defined.');
 
 
