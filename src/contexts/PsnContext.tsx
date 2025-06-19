@@ -137,13 +137,12 @@ export const PsnProvider = ({ children }: PsnProviderProps) => {
     }
   }, [isConnected, authContext.user?.psnAccountId, toast]); // Add fetchPsnGames to useEffect dependency array if called there
 
-   // Effect to fetch games when isConnected becomes true and profile is set
+   // Effect to fetch games when isConnected becomes true and profile is set, or when fetchPsnGames itself is updated
    useEffect(() => {
     if (isConnected && psnProfile?.accountId) {
       fetchPsnGames();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isConnected, psnProfile?.accountId]); // Do not add fetchPsnGames here to avoid loop if fetchPsnGames itself changes isConnected/psnProfile
+  }, [isConnected, psnProfile?.accountId, fetchPsnGames]); // Added fetchPsnGames
 
   const connectPsn = useCallback(async (npsso: string) => {
     setIsConnecting(true);
