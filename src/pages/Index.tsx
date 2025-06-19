@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
 import { PlatformStats } from "@/components/dashboard/PlatformStats";
 import { GameLibrary } from "@/components/dashboard/GameLibrary";
@@ -36,52 +36,89 @@ const Index = () => {
   // PSN state (from context)
   const { games: psnGames, isLoading: isLoadingPsnGames, error: psnGamesError } = usePsn();
 
-  const { fetchSteamGames, steamId } = useSteam();
-  const { fetchGogGames, gogUserId } = useGog();
+  const { steamId } = useSteam(); // Removed fetchSteamGames from destructuring
+  const { gogUserId } = useGog(); // Removed fetchGogGames from destructuring
+
+  // useCallback for fetching Steam games
+  const fetchSteamGames = useCallback(async () => {
+    if (!steamId) {
+      setSteamGames([]);
+      setSteamGamesError(null); // Clear error if no steamId
+      setIsLoadingSteamGames(false); // Not loading if no steamId
+      return;
+    }
+
+    setIsLoadingSteamGames(true);
+    setSteamGamesError(null); // Clear previous errors
+    try {
+      const response = await fetch(`/api/steam/user/${steamId}/games`);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({})); // Try to parse error, default if not parsable
+        throw new Error(errorData.error || `Error fetching Steam games: ${response.status}`);
+      }
+      // The backend for Steam returns { games: [], count: number }
+      // Ensure we are setting steamGames to data.games
+      const data = await response.json();
+      setSteamGames(data?.games || []); // Adjusted to access data.games
+    } catch (err) {
+      console.error("Error fetching Steam games:", err);
+      setSteamGamesError(err instanceof Error ? err : new Error('Failed to fetch Steam games'));
+      setSteamGames([]); // Clear games on error
+    } finally {
+      setIsLoadingSteamGames(false);
+    }
+  }, [steamId]);
+
+  // useCallback for fetching GOG games
+  const fetchGogGames = useCallback(async () => {
+    if (!gogUserId) {
+      setGogGames([]);
+      setGogGamesError(null);
+      setIsLoadingGogGames(false);
+      return;
+    }
+
+    setIsLoadingGogGames(true);
+    setGogGamesError(null);
+    try {
+      const response = await fetch(`/api/gog/user/${gogUserId}/games`);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `Error fetching GOG games: ${response.status}`);
+      }
+      const data = await response.json();
+      setGogGames(data || []); // GOG backend directly returns the array
+    } catch (err) {
+      console.error("Error fetching GOG games:", err);
+      setGogGamesError(err instanceof Error ? err : new Error('Failed to fetch GOG games'));
+      setGogGames([]);
+    } finally {
+      setIsLoadingGogGames(false);
+    }
+  }, [gogUserId]);
 
   // Effect for fetching Steam games
   useEffect(() => {
-    if (steamId) {
-      setIsLoadingSteamGames(true);
-      fetchSteamGames()
-        .then(data => {
-          setSteamGames(data?.games || []);
-          setSteamGamesError(null);
-        })
-        .catch(err => {
-          console.error("Error fetching Steam games:", err);
-          setSteamGamesError(err);
-          setSteamGames([]);
-        })
-        .finally(() => {
-          setIsLoadingSteamGames(false);
-        });
+    if (steamId) { // Condition to run fetch
+      fetchSteamGames();
     } else {
+      // Clear games if steamId is removed (e.g., user disconnects)
       setSteamGames([]);
+      setSteamGamesError(null);
+      setIsLoadingSteamGames(false);
     }
-  }, [steamId, fetchSteamGames]);
+  }, [steamId, fetchSteamGames]); // fetchSteamGames is now a dependency
 
   // Effect for fetching GOG games
   useEffect(() => {
     if (gogUserId) {
-      setIsLoadingGogGames(true);
-      fetchGogGames()
-        .then(data => {
-          setGogGames(data || []);
-          setGogGamesError(null);
-        })
-        .catch(err => {
-          console.error("Error fetching GOG games:", err);
-          setGogGamesError(err);
-          setGogGames([]);
-        })
-        .finally(() => {
-          setIsLoadingGogGames(false);
-        });
+      fetchGogGames();
     } else {
       setGogGames([]);
+      setGogGamesError(null);
+      setIsLoadingGogGames(false);
     }
-  }, [gogUserId, fetchGogGames]);
+  }, [gogUserId, fetchGogGames]); // fetchGogGames is now a dependency
 
   const [allGames, setAllGames] = useState<Game[]>([]);
 
