@@ -1,13 +1,14 @@
 const express = require('express');
 const logger = require('../config/logger');
 const User = require('../models/User');
+const PsnGame = require('../models/PsnGame'); // Import PsnGame Model
 const {
   exchangeNpssoForAccessCode,
   exchangeAccessCodeForAuthTokens,
   getUserTitles,
   getProfileFromAccountId,
 } = require('psn-api');
-const jwtDecode = require('jwt-decode'); // Changed import statement
+const jwtDecode = require('jwt-decode');
 
 const router = express.Router();
 
@@ -45,14 +46,11 @@ router.post('/connect', async (req, res) => {
     }
     logger.info(`Extracted accountId ${accountIdFromToken} from idToken for user ${req.user.id}.`);
 
-    // accessToken is still needed for getProfileFromAccountId
-    const { accessToken, refreshToken } = authorization;
+    const { accessToken } = authorization; // refreshToken also available if needed
 
-    // Use the accountId extracted from the idToken
     const userPSNProfile = await getProfileFromAccountId({ accessToken }, accountIdFromToken);
     logger.info(`Successfully fetched PSN profile for user ${req.user.id} using accountId ${accountIdFromToken}: ${userPSNProfile.onlineId}`);
 
-    // Check if this NPSSO is already linked to a DIFFERENT user account
     const existingUserWithNpsso = await User.findOne({ npsso: npsso, _id: { $ne: req.user.id } });
     if (existingUserWithNpsso) {
       logger.warn(`User ${req.user.id} attempting to connect NPSSO token that is already in use by user ${existingUserWithNpsso._id}.`);
@@ -62,13 +60,12 @@ router.post('/connect', async (req, res) => {
     const user = await User.findByIdAndUpdate(
       req.user.id,
       {
-        npsso, // Save the original NPSSO
-        psnAccountId: accountIdFromToken, // Use accountId from idToken
-        psnOnlineId: userPSNProfile.onlineId, // onlineId from the fetched profile
-        // Optionally store accessToken and refreshToken if your strategy involves refreshing them
+        npsso,
+        psnAccountId: accountIdFromToken,
+        psnOnlineId: userPSNProfile.onlineId,
       },
       { new: true }
-    ).select('-password -npsso'); // Exclude password and npsso from the returned user object
+    ).select('-password -npsso');
 
     if (!user) {
       logger.warn(`User not found during PSN connect process for ID: ${req.user.id}`);
@@ -78,19 +75,22 @@ router.post('/connect', async (req, res) => {
     res.json({
       message: 'PSN account connected successfully',
       psnProfile: {
-        accountId: accountIdFromToken, // Send back the accountId from idToken
+        accountId: accountIdFromToken,
         onlineId: userPSNProfile.onlineId,
         avatarUrl: userPSNProfile.avatarUrls?.[0]?.avatarUrl,
       },
-      user, // Send back the updated user object (excluding sensitive fields)
+      user,
     });
 
   } catch (error) {
     logger.error(`Error connecting PSN account for user ${req.user.id}:`, error);
-    if (error.message && error.message.includes("NPSSO code is expired or invalid")) {
+    if (error.message && (error.message.includes("NPSSO code is expired or invalid") || error.message.includes("authentication_error") )) {
         return res.status(400).json({ message: 'Invalid or expired NPSSO token. Please provide a new one.' });
     }
-    // Generic error for other psn-api or database issues
+    if (error.code === 'ECONNRESET' || error.message.includes('timed out')) {
+      logger.error(`PSN API connection timed out for user ${req.user.id}:`, error);
+      return res.status(504).json({ message: 'Connection to PSN API timed out. Please try again later.' });
+    }
     res.status(500).json({ message: 'Failed to connect to PSN. Please ensure your NPSSO is correct and try again.' });
   }
 });
@@ -111,26 +111,90 @@ router.get('/games', async (req, res) => {
       return res.status(400).json({ message: 'PSN account not connected. Please connect your PSN account first via POST /api/psn/connect.' });
     }
 
-    logger.info(`Fetching PSN games for user ${user.id} (${user.psnOnlineId}). Exchanging NPSSO for access code.`);
+    // --- MongoDB Cache Check ---
+    const cacheValidityPeriod = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+    const twentyFourHoursAgo = new Date(Date.now() - cacheValidityPeriod);
+
+    const cachedGames = await PsnGame.find({
+      userId: req.user.id,
+      lastFetched: { $gte: twentyFourHoursAgo }
+    }).sort({ trophyTitleName: 1 });
+
+    if (cachedGames.length > 0) {
+      logger.info(`Serving ${cachedGames.length} PSN games from cache for user ${req.user.id}.`);
+      return res.json({
+        message: 'PSN games fetched successfully from cache.',
+        games: cachedGames,
+        totalGames: cachedGames.length,
+        source: 'cache'
+      });
+    }
+    logger.info(`No fresh PSN games in cache for user ${req.user.id}. Fetching from PSN API.`);
+    // --- End MongoDB Cache Check ---
+
+    logger.info(`Fetching PSN games for user ${user.id} (${user.psnOnlineId || 'N/A'}). Exchanging NPSSO for access code.`);
     const accessCode = await exchangeNpssoForAccessCode(user.npsso);
     logger.info(`Successfully exchanged NPSSO for access code for user ${user.id}. Now exchanging for auth tokens.`);
 
     const { accessToken } = await exchangeAccessCodeForAuthTokens(accessCode);
     logger.info(`Successfully obtained access token for user ${user.id}. Fetching user titles.`);
 
-    const psnUserTitles = await getUserTitles({ accessToken }, "me");
-    logger.info(`Successfully fetched ${psnUserTitles.trophyTitles?.length ?? 0} titles for user ${user.id}.`);
+    const psnUserTitlesResponse = await getUserTitles({ accessToken }, "me");
+    logger.info(`Successfully fetched ${psnUserTitlesResponse.trophyTitles?.length ?? 0} titles from PSN API for user ${user.id}.`);
+
+    const fetchedGames = psnUserTitlesResponse.trophyTitles || [];
+    let savedGamesCount = 0;
+
+    if (fetchedGames.length > 0) {
+      logger.info(`Saving/updating ${fetchedGames.length} PSN games to MongoDB for user ${req.user.id}.`);
+      for (const gameDetail of fetchedGames) {
+        const gameDataToSave = {
+          userId: req.user.id,
+          npCommunicationId: gameDetail.npCommunicationId,
+          trophyTitleName: gameDetail.trophyTitleName,
+          trophyTitleIconUrl: gameDetail.trophyTitleIconUrl,
+          trophyTitlePlatform: gameDetail.trophyTitlePlatform,
+          trophySetVersion: gameDetail.trophySetVersion,
+          lastUpdatedDateTime: gameDetail.lastUpdatedDateTime ? new Date(gameDetail.lastUpdatedDateTime) : undefined,
+          definedTrophies: gameDetail.definedTrophies,
+          earnedTrophies: gameDetail.earnedTrophies,
+          lastFetched: new Date()
+        };
+
+        try {
+          await PsnGame.findOneAndUpdate(
+            { userId: req.user.id, npCommunicationId: gameDetail.npCommunicationId },
+            gameDataToSave,
+            { upsert: true, new: true, setDefaultsOnInsert: true }
+          );
+          savedGamesCount++;
+        } catch (dbSaveError) {
+          logger.error(`Failed to save PSN game ${gameDetail.npCommunicationId} to MongoDB for user ${req.user.id}:`, {
+            errorMessage: dbSaveError.message,
+            // gameData: gameDataToSave // Be cautious logging full gameData
+          });
+        }
+      }
+      logger.info(`Finished saving/updating ${savedGamesCount} PSN games to MongoDB for user ${req.user.id}.`);
+    }
+
+    const finalGamesToReturn = await PsnGame.find({ userId: req.user.id }).sort({ trophyTitleName: 1 });
 
     res.json({
-        message: 'PSN games fetched successfully',
-        games: psnUserTitles.trophyTitles || [],
-        totalGames: psnUserTitles.totalItemCount,
+        message: 'PSN games fetched successfully from API and updated in DB.',
+        games: finalGamesToReturn,
+        totalGames: finalGamesToReturn.length, // psnUserTitlesResponse.totalItemCount might be more accurate from API
+        source: 'api'
     });
 
   } catch (error) {
     logger.error(`Error fetching PSN games for user ${req.user?.id}:`, error);
-    if (error.message && error.message.includes("NPSSO code is expired or invalid")) {
+    if (error.message && (error.message.includes("NPSSO code is expired or invalid") || error.message.includes("authentication_error"))) {
         return res.status(401).json({ message: 'NPSSO token is invalid or expired. Please reconnect your PSN account.' });
+    }
+    if (error.code === 'ECONNRESET' || error.message.includes('timed out')) {
+      logger.error(`PSN API connection timed out during games fetch for user ${req.user?.id}:`, error);
+      return res.status(504).json({ message: 'Connection to PSN API timed out while fetching games. Please try again later.' });
     }
     res.status(500).json({ message: 'Error fetching PSN games.' });
   }
