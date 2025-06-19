@@ -2,7 +2,7 @@ export interface Game {
   id: string;
   appId?: string;
   title: string;
-  platform: 'steam' | 'epic' | 'xbox' | 'gog';
+  platform: 'steam' | 'epic' | 'xbox' | 'gog' | 'psn';
   coverImage: string;
   playtime: number; // in hours
   lastPlayed: string;
