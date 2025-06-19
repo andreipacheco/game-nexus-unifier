@@ -52,6 +52,13 @@ router.post('/connect', async (req, res) => {
     const userPSNProfile = await getProfileFromAccountId({ accessToken }, accountIdFromToken);
     logger.info(`Successfully fetched PSN profile for user ${req.user.id} using accountId ${accountIdFromToken}: ${userPSNProfile.onlineId}`);
 
+    // Check if this NPSSO is already linked to a DIFFERENT user account
+    const existingUserWithNpsso = await User.findOne({ npsso: npsso, _id: { $ne: req.user.id } });
+    if (existingUserWithNpsso) {
+      logger.warn(`User ${req.user.id} attempting to connect NPSSO token that is already in use by user ${existingUserWithNpsso._id}.`);
+      return res.status(409).json({ message: 'This PSN account (NPSSO token) is already linked to a different user account in Game Nexus Unifier.' });
+    }
+
     const user = await User.findByIdAndUpdate(
       req.user.id,
       {
