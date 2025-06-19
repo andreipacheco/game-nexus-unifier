@@ -110,17 +110,23 @@ export const XboxProvider = ({ children }: { children: ReactNode }) => {
     } finally {
       setIsLoading(false);
     }
-  }, []); // Removed user from dependencies for now, fetchXboxGames takes xuid
+  }, []); // fetchXboxGames is stable, does not depend on user, takes xuid as arg.
 
-  // Potential: Auto-fetch for fetchXboxGames if XUID is available and changes
-  // useEffect(() => {
-  //   const xboxXuid = user?.platformProfiles?.xbox?.xuid;
-  //   if (xboxXuid) {
-  //     fetchXboxGames(xboxXuid);
-  //   } else {
-  //     setXboxGames([]); // Clear games if no XUID
-  //   }
-  // }, [user, fetchXboxGames]);
+  // Auto-fetch Xbox games if XUID from AuthContext changes or becomes available.
+  useEffect(() => {
+    const xboxXuid = user?.platformProfiles?.xbox?.xuid; // Path to XUID from AuthContext's user object
+
+    if (xboxXuid) {
+      if (xboxXuid !== currentXuid) { // Only fetch if XUID is new or different
+        fetchXboxGames(xboxXuid);
+      }
+    } else {
+      // If no XUID (e.g., user logs out, disconnects Xbox), clear Xbox specific data
+      setXboxGames([]);
+      setCurrentXuid(null);
+      setError(null); // Optionally clear error too
+    }
+  }, [user, fetchXboxGames, currentXuid]); // Dependencies: user object, fetchXboxGames callback, currentXuid state
 
   // const clearXboxData = () => {
   //   setXboxGames([]);
