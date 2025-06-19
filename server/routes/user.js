@@ -18,7 +18,7 @@ router.get('/me', ensureAuthenticated, (req, res) => {
   // req.user is populated by Passport's deserializeUser
   // We select only the fields safe to send to the frontend.
   // Added email and name, as they are now part of the User model
-  const { _id, steamId, googleId, email, name, personaName, avatar, profileUrl, createdAt } = req.user;
+  const { _id, steamId, googleId, email, name, personaName, avatar, profileUrl, createdAt, psnAccountId, psnOnlineId } = req.user;
 
   const profileData = {
     id: _id, // Expose user ID
@@ -29,6 +29,8 @@ router.get('/me', ensureAuthenticated, (req, res) => {
     avatarFull: avatar,
     profileUrl,
     createdAt,
+    psnAccountId,    // Add this
+    psnOnlineId      // Add this
   };
 
   logger.debug('Authenticated user profile requested.', { userId: req.user.id });

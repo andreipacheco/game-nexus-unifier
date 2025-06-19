@@ -67,6 +67,10 @@ router.post('/connect', async (req, res) => {
       { new: true }
     ).select('-password -npsso');
 
+    if (user) { // Check if user is not null before logging its properties
+       logger.info(`User data after PSN update (selected for response): id: ${user._id}, psnAccountId: ${user.psnAccountId}, psnOnlineId: ${user.psnOnlineId}`);
+    }
+
     if (!user) {
       logger.warn(`User not found during PSN connect process for ID: ${req.user.id}`);
       return res.status(404).json({ message: 'User not found' });
