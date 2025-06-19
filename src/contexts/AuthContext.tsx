@@ -10,6 +10,9 @@ interface User {
   steamId?: string;
   googleId?: string;
   createdAt?: Date;
+  xuid?: string; // Added
+  psnAccountId?: string; // Added
+  psnOnlineId?: string; // Added
 }
 
 interface AuthContextType {

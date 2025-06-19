@@ -114,7 +114,7 @@ export const XboxProvider = ({ children }: { children: ReactNode }) => {
 
   // Auto-fetch Xbox games if XUID from AuthContext changes or becomes available.
   useEffect(() => {
-    const xboxXuid = user?.platformProfiles?.xbox?.xuid; // Path to XUID from AuthContext's user object
+    const xboxXuid = user?.xuid; // Access xuid directly from user object
 
     if (xboxXuid) {
       if (xboxXuid !== currentXuid) { // Only fetch if XUID is new or different
