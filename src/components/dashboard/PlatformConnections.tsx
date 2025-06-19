@@ -133,6 +133,7 @@ export const PlatformConnections = () => {
     errorConnect: errorConnectPsn,
     connectPsn,
     disconnectPsn,
+    psnGames, // Ensure psnGames is destructured
     // fetchPsnGames, // Not called directly from button here
   } = usePsn();
 
@@ -606,6 +607,15 @@ export const PlatformConnections = () => {
                   <div className="text-xs p-2 bg-blue-50 rounded border border-blue-200">
                     <p className="font-medium">PSN ID: {psnProfile.onlineId}</p>
                     {isLoadingPsnGames && <p className="text-xs">Loading games...</p>}
+                    {!isLoadingPsnGames && psnGames && (
+                      <p className="text-xs">Games: {psnGames.length}</p>
+                    )}
+                    {!isLoadingPsnGames && psnGames && psnGames.length === 0 && !errorPsnGames && (
+                      <p className="text-xs">No PSN games found or synced yet.</p>
+                    )}
+                    {errorPsnGames && (
+                         <p className="text-xs text-red-500">Error loading games: {String(errorPsnGames).substring(0,100)}</p>
+                    )}
                   </div>
                 )}
               </div>

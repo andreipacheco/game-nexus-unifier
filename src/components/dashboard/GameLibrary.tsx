@@ -46,6 +46,8 @@ import { useSteam } from "@/contexts/SteamContext";
 import { useGog } from "@/contexts/GogContext";
 import { useXbox } from "@/contexts/XboxContext"; // Import useXbox
 import type { XboxGame } from "@/contexts/XboxContext"; // Import XboxGame type
+import { usePsn } from '@/contexts/PsnContext'; // Import usePsn
+import type { PsnGame } from '@/contexts/PsnContext'; // Import PsnGame type
 
 // Helper to convert SteamGame to Game for consistent display, or GameCard could be adapted
 const steamGameToGameType = (steamGame: SteamGame): Game | null => {
@@ -126,6 +128,7 @@ export const GameLibrary = ({ games, selectedPlatform, onPlatformChange }: GameL
   const { steamId, steamUser } = useSteam();
   const { gogUserId } = useGog();
   const { xboxGames: xboxGamesFromContext, isLoading: isLoadingXbox, error: errorXbox } = useXbox(); // Get Xbox data
+  const { psnGames, isLoadingGames: isLoadingPsnGames, errorGames: errorPsnGames, isConnected: isPsnConnected, psnProfile } = usePsn(); // Get PSN data
 
   const [searchTerm, setSearchTerm] = useState("");
   const [steamGames, setSteamGames] = useState<SteamGame[]>([]);
@@ -232,7 +235,8 @@ const mapXboxGameToGenericGame = (xboxGame: XboxGame): Game | null => {
     ...games,
     ...(steamGames.map(steamGameToGameType).filter(Boolean) as Game[]),
     ...(gogGames.map(gogGameToGameType).filter(Boolean) as Game[]),
-    ...(xboxGamesFromContext.map(mapXboxGameToGenericGame).filter(Boolean) as Game[])
+    ...(xboxGamesFromContext.map(mapXboxGameToGenericGame).filter(Boolean) as Game[]),
+    ...(psnGames.map(psnGameToGameType).filter(Boolean) as Game[]) // Add PSN games
   ];
 
   const currentPlatformInfo: PlatformInfo = {
@@ -280,10 +284,10 @@ const mapXboxGameToGenericGame = (xboxGame: XboxGame): Game | null => {
       // Show filter if the user is connected to the platform, even if count is 0 initially
       if (f.key === 'steam' && steamId && steamUser) return true;
       if (f.key === 'gog' && gogUserId) return true;
-      if (f.key === 'xbox' && xboxGamesFromContext.length > 0) return true; // Show if connected, even if 0 games after filter
-      // Or, more simply, always show if platform is in platformInfo and user is "connected"
-      // For Xbox, "connected" means xboxGamesFromContext exists and no error, handled by context
-      if (f.key === 'xbox' && !errorXbox) return true; // Show if no error, implies an attempt was made or is possible
+      // For Xbox, show if an attempt was made (no error) or if games are loaded
+      if (f.key === 'xbox' && (!errorXbox || xboxGamesFromContext.length > 0)) return true;
+      // For PSN, show if connected (implies an attempt was made) or if games are loaded
+      if (f.key === 'psn' && (isPsnConnected || psnGames.length > 0)) return true;
       return false;
     }
   );
@@ -402,13 +406,40 @@ const mapXboxGameToGenericGame = (xboxGame: XboxGame): Game | null => {
         </Card>
       )}
 
+      {/* PSN Games Loading State */}
+      {isLoadingPsnGames && (
+        <Card>
+          <CardContent className="flex items-center justify-center py-12">
+            <Loader2 className="h-8 w-8 animate-spin text-primary mr-3" />
+            <p className="text-muted-foreground">Loading PSN games...</p>
+          </CardContent>
+        </Card>
+      )}
+      {/* PSN Games Error State */}
+      {errorPsnGames && !isLoadingPsnGames && (
+        <Card className="border-destructive">
+          <CardHeader>
+            <CardTitle className="flex items-center text-destructive">
+              <AlertTriangle className="h-5 w-5 mr-2" />
+              Error Loading PSN Games
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-destructive">{String(errorPsnGames)}</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              Could not fetch your PSN games. Please ensure your account is connected and try again later.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         {filteredGames.map((game) => (
           <GameCard key={game.id} game={game} />
         ))}
       </div>
 
-      {filteredGames.length === 0 && !isLoadingSteamGames && !isLoadingGogGames && !isLoadingXbox && (
+      {filteredGames.length === 0 && !isLoadingSteamGames && !isLoadingGogGames && !isLoadingXbox && !isLoadingPsnGames && (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
             <Search className="h-12 w-12 text-muted-foreground mb-4" />
@@ -417,6 +448,7 @@ const mapXboxGameToGenericGame = (xboxGame: XboxGame): Game | null => {
               {selectedPlatform === 'steam' && steamId && !steamGamesError && steamGames.length === 0 ? 'No Steam games to display or library is private.' :
                selectedPlatform === 'gog' && gogUserId && !gogGamesError && gogGames.length === 0 ? 'No GOG games to display.' :
                selectedPlatform === 'xbox' && !errorXbox && xboxGamesFromContext.length === 0 ? 'No Xbox games to display or profile is private.' :
+               selectedPlatform === 'psn' && isPsnConnected && !errorPsnGames && psnGames.length === 0 ? 'No PSN games to display or library is empty.' :
                'Try adjusting your search or platform filter.'}
             </p>
           </CardContent>
@@ -424,4 +456,44 @@ const mapXboxGameToGenericGame = (xboxGame: XboxGame): Game | null => {
       )}
     </div>
   );
+};
+
+// Must be defined in the same file or imported if defined elsewhere
+const psnGameToGameType = (psnGame: PsnGame): Game | null => {
+  if (!psnGame || !psnGame.npCommunicationId) {
+    console.warn('Skipping PSN game with missing npCommunicationId:', psnGame);
+    return null;
+  }
+
+  const gameTitle = psnGame.trophyTitleName || 'Unknown PSN Game';
+
+  const playtimeHours = 0; // getUserTitles doesn't typically include playtime
+  const defaultLastPlayed = psnGame.lastUpdatedDateTime || new Date(0).toISOString();
+  const achievements = {
+    unlocked: (psnGame.earnedTrophies?.platinum || 0) +
+              (psnGame.earnedTrophies?.gold || 0) +
+              (psnGame.earnedTrophies?.silver || 0) +
+              (psnGame.earnedTrophies?.bronze || 0),
+    total: (psnGame.definedTrophies?.platinum || 0) +
+           (psnGame.definedTrophies?.gold || 0) +
+           (psnGame.definedTrophies?.silver || 0) +
+           (psnGame.definedTrophies?.bronze || 0),
+  };
+  if (achievements.total === 0 && achievements.unlocked > 0) {
+    achievements.total = achievements.unlocked;
+  }
+
+  return {
+    id: `psn-${psnGame.npCommunicationId}`,
+    appId: psnGame.npCommunicationId,
+    title: gameTitle,
+    platform: 'psn',
+    coverImage: psnGame.trophyTitleIconUrl || '/placeholder.svg',
+    playtime: playtimeHours,
+    lastPlayed: defaultLastPlayed,
+    achievements: achievements,
+    status: 'owned',
+    genre: [psnGame.trophyTitlePlatform || 'Unknown Genre'],
+    releaseYear: 0,
+  };
 };

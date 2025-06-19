@@ -12,17 +12,33 @@ import { useToast } from '@/components/ui/use-toast'; // Assuming this path is c
 
 // 1. Interfaces
 export interface PsnGame {
-  npCommunicationId: string;
-  trophyTitleName: string;
-  trophyTitleIconUrl: string;
-  trophyTitlePlatform: string;
-  // Add other fields based on actual psn-api response for getUserTitles
-  // Example:
-  // lastUpdatedDateTime?: string;
-  // definedTrophies?: { bronze: number; silver: number; gold: number; platinum: number };
-  // earnedTrophies?: { bronze: number; silver: number; gold: number; platinum: number };
-  // trophySetVersion?: string;
-  // hasPlatinum?: boolean;
+  // Core fields from TrophyTitle
+  npCommunicationId: string;       // Game ID (e.g., "NPWR00123_00")
+  trophyTitleName: string;         // Name of the game
+  trophyTitleIconUrl: string;      // URL for the game's icon
+  trophyTitlePlatform: string;     // Platform (e.g., "PS5", "PS4")
+
+  // Optional but useful fields from TrophyTitle
+  trophySetVersion?: string;       // Version of the trophy set
+  lastUpdatedDateTime?: string;    // ISO date string of last trophy activity
+
+  // Trophy counts
+  definedTrophies?: {             // Total trophies defined for the title
+    bronze: number;
+    silver: number;
+    gold: number;
+    platinum: number; // Usually 0 or 1 for platinum
+  };
+  earnedTrophies?: {              // Trophies earned by the user for this title
+    bronze: number;
+    silver: number;
+    gold: number;
+    platinum: number;
+  };
+
+  // Additional fields you might find in TrophyTitle or want to add for consistency
+  // hiddenFlag?: boolean;
+  // progress?: number; // Overall progress percentage
 }
 
 export interface PsnProfile {

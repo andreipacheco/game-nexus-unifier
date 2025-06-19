@@ -7,6 +7,7 @@ const {
   getUserTitles,
   getProfileFromAccountId,
 } = require('psn-api');
+const jwtDecode = require('jwt-decode'); // Changed import statement
 
 const router = express.Router();
 
@@ -26,22 +27,38 @@ router.post('/connect', async (req, res) => {
     const accessCode = await exchangeNpssoForAccessCode(npsso);
     logger.info(`Successfully exchanged NPSSO for access code for user ${req.user.id}.`);
 
-    const authTokens = await exchangeAccessCodeForAuthTokens(accessCode);
+    const authorization = await exchangeAccessCodeForAuthTokens(accessCode);
     logger.info(`Successfully exchanged access code for auth tokens for user ${req.user.id}.`);
 
-    const { accessToken, refreshToken } = authTokens; // refreshToken can be stored for future use if needed
+    if (!authorization.idToken) {
+      logger.error(`idToken not found in PSN authorization response for user ${req.user.id}.`);
+      return res.status(500).json({ message: 'Failed to retrieve idToken from PSN. Cannot determine account ID.' });
+    }
 
-    const profile = await getProfileFromAccountId({ accessToken }, "me");
-    logger.info(`Successfully fetched PSN profile for user ${req.user.id}: ${profile.onlineId}`);
+    const decodedIdToken = jwtDecode(authorization.idToken);
+    logger.info(`Decoded idToken for user ${req.user.id}:`, decodedIdToken);
+
+    const accountIdFromToken = decodedIdToken?.sub;
+    if (!accountIdFromToken) {
+      logger.error(`accountId (sub) not found in decoded idToken for user ${req.user.id}. Decoded token: ${JSON.stringify(decodedIdToken)}`);
+      return res.status(500).json({ message: 'Failed to extract accountId from PSN idToken.' });
+    }
+    logger.info(`Extracted accountId ${accountIdFromToken} from idToken for user ${req.user.id}.`);
+
+    // accessToken is still needed for getProfileFromAccountId
+    const { accessToken, refreshToken } = authorization;
+
+    // Use the accountId extracted from the idToken
+    const userPSNProfile = await getProfileFromAccountId({ accessToken }, accountIdFromToken);
+    logger.info(`Successfully fetched PSN profile for user ${req.user.id} using accountId ${accountIdFromToken}: ${userPSNProfile.onlineId}`);
 
     const user = await User.findByIdAndUpdate(
       req.user.id,
       {
-        npsso, // Save the original NPSSO for future direct use if the library supports/requires it
-        psnAccountId: profile.accountId,
-        psnOnlineId: profile.onlineId,
+        npsso, // Save the original NPSSO
+        psnAccountId: accountIdFromToken, // Use accountId from idToken
+        psnOnlineId: userPSNProfile.onlineId, // onlineId from the fetched profile
         // Optionally store accessToken and refreshToken if your strategy involves refreshing them
-        // For now, we'll re-authenticate with NPSSO each time for simplicity in this example
       },
       { new: true }
     ).select('-password -npsso'); // Exclude password and npsso from the returned user object
@@ -54,9 +71,9 @@ router.post('/connect', async (req, res) => {
     res.json({
       message: 'PSN account connected successfully',
       psnProfile: {
-        accountId: profile.accountId,
-        onlineId: profile.onlineId,
-        avatarUrl: profile.avatarUrls?.[0]?.avatarUrl, // Example of fetching additional profile data
+        accountId: accountIdFromToken, // Send back the accountId from idToken
+        onlineId: userPSNProfile.onlineId,
+        avatarUrl: userPSNProfile.avatarUrls?.[0]?.avatarUrl,
       },
       user, // Send back the updated user object (excluding sensitive fields)
     });
@@ -95,11 +112,11 @@ router.get('/games', async (req, res) => {
     logger.info(`Successfully obtained access token for user ${user.id}. Fetching user titles.`);
 
     const psnUserTitles = await getUserTitles({ accessToken }, "me");
-    logger.info(`Successfully fetched ${psnUserTitles.titles.length} titles for user ${user.id}.`);
+    logger.info(`Successfully fetched ${psnUserTitles.trophyTitles?.length ?? 0} titles for user ${user.id}.`);
 
     res.json({
         message: 'PSN games fetched successfully',
-        games: psnUserTitles.titles,
+        games: psnUserTitles.trophyTitles || [],
         totalGames: psnUserTitles.totalItemCount,
     });
 
