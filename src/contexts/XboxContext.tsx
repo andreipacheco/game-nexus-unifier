@@ -80,9 +80,9 @@ export const XboxProvider = ({ children }: { children: ReactNode }) => {
     setCurrentXuid(xuid); // Set current XUID when fetching games
     setError(null);
     try {
-      const response = await axios.get<{ _id: string }[] & XboxGame[]>(`/api/xbox/user/${xuid}/games`);
-      // Sort games by name, or any other preferred criteria
-      const sortedGames = response.data.sort((a, b) => a.name.localeCompare(b.name));
+      const response = await axios.get<{ games?: XboxGame[] }>(`/api/xbox/user/${xuid}/games`);
+      const gamesArray = response.data?.games || [];
+      const sortedGames = gamesArray.sort((a, b) => a.name.localeCompare(b.name));
       setXboxGames(sortedGames);
       toast({
         title: "Xbox games loaded",

@@ -118,11 +118,11 @@ export const PsnProvider = ({ children }: PsnProviderProps) => {
     setIsLoadingGames(true);
     setErrorGames(null);
     try {
-      const response = await axios.get<PsnGame[]>('/api/psn/games'); // Expecting a direct array of PsnGame
-      setPsnGames(response.data || []); // Process data as a direct array
+      const response = await axios.get<{ games?: PsnGame[] }>('/api/psn/games'); // Expecting an object with optional games array
+      setPsnGames(response.data?.games || []); // Access games property, default to empty array
       // toast({
       //   title: 'PSN Games Fetched',
-      //   description: `Successfully retrieved ${response.data?.length || 0} PSN games.`, // Adjusted toast
+      //   description: `Successfully retrieved ${response.data?.games?.length || 0} PSN games.`, // Adjusted toast
       // });
     } catch (err: any) {
       const errorMessage = err.response?.data?.message || err.message || 'Failed to fetch PSN games.';
