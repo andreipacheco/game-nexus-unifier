@@ -1,6 +1,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Game, platformInfo } from "@/data/mockGameData";
+import { Game } from "@/types/gameTypes";
+import { platformInfo } from "@/config/platformConfig";
 import { Clock, Trophy, GamepadIcon as TotalGamesIcon, Download, Star } from "lucide-react"; // Renamed GamepadIcon, Added Star for Gamerscore
 
 interface PlatformStatsProps {
