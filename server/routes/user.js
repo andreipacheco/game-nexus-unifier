@@ -95,6 +95,7 @@ module.exports = router;
 // GET /api/user/stats - Fetches consolidated game statistics for the authenticated user
 router.get('/stats', ensureAuthenticated, async (req, res) => {
   try {
+    console.log('User object for stats:', req.user); // Added diagnostic log
     const userId = req.user._id;
     const steamId = req.user.steamId;
     const xuid = req.user.xuid; // This might be undefined, and that's okay
@@ -106,6 +107,7 @@ router.get('/stats', ensureAuthenticated, async (req, res) => {
     // Fetch Steam games
     if (steamId) {
       steamGames = await SteamGame.find({ steamId: steamId });
+      console.log('Raw Steam games count:', steamGames.length); // Added diagnostic log
       logger.info(`Fetched ${steamGames.length} Steam games for user ${userId}`);
     } else {
       logger.info(`No Steam ID found for user ${userId}, skipping Steam games fetch.`);
@@ -114,11 +116,13 @@ router.get('/stats', ensureAuthenticated, async (req, res) => {
     // Fetch PSN games
     // Assuming PsnGame stores a reference to the User model's _id
     psnGames = await PsnGame.find({ userId: userId });
+    console.log('Raw PSN games count:', psnGames.length); // Added diagnostic log
     logger.info(`Fetched ${psnGames.length} PSN games for user ${userId}`);
 
     // Fetch Xbox games
     if (xuid) {
       xboxGames = await XboxGame.find({ xuid: xuid });
+      console.log('Raw Xbox games count:', xboxGames.length); // Added diagnostic log
       logger.info(`Fetched ${xboxGames.length} Xbox games for user ${userId}`);
     } else {
       logger.info(`No XUID found for user ${userId}, skipping Xbox games fetch.`);

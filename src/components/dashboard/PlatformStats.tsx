@@ -9,6 +9,8 @@ interface PlatformStatsProps {
 }
 
 export const PlatformStats = ({ games }: PlatformStatsProps) => {
+  console.log('PlatformStats received games:', JSON.stringify(games, null, 2)); // Added diagnostic log
+
   const totalGames = games.length;
   const totalPlaytime = games.reduce((acc, game) => acc + (game.playtime || 0), 0); // Ensure playtime is handled if undefined
   const totalUnlockedAchievements = games.reduce((acc, game) => acc + (game.achievements?.unlocked || 0), 0);
@@ -36,6 +38,12 @@ export const PlatformStats = ({ games }: PlatformStatsProps) => {
       playtime: platformGames.reduce((acc, game) => acc + game.playtime, 0)
     };
   });
+
+  console.log('Intermediate platformStats array:', JSON.stringify(platformStats, null, 2)); // Added diagnostic log
+
+  const filteredConnectedPlatforms = platformStats.filter(p => p.count > 0 || (p.platform === 'xbox' && totalPossibleGamerscore > 0));
+  console.log('Filtered platforms for connected count:', JSON.stringify(filteredConnectedPlatforms, null, 2)); // Added diagnostic log
+  const connectedPlatformsCount = filteredConnectedPlatforms.length;
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -101,12 +109,15 @@ export const PlatformStats = ({ games }: PlatformStatsProps) => {
         </CardHeader>
         <CardContent>
           <div className="text-2xl font-bold">
-            {platformStats.filter(p => p.count > 0 || (p.platform === 'xbox' && totalPossibleGamerscore > 0)).length}
+            {connectedPlatformsCount}
             {/* Count platform if it has games OR if it's xbox and has gamerscore (even if 0 games shown due to filters elsewhere) */}
           </div>
           <div className="flex space-x-1 mt-2">
-            {platformStats.map((platform) => (
-              (platform.count > 0 || (platform.platform === 'xbox' && totalPossibleGamerscore > 0)) && (
+            {filteredConnectedPlatforms.map((platform) => (
+              // Render only based on the pre-filtered list
+              // (platform.count > 0 || (platform.platform === 'xbox' && totalPossibleGamerscore > 0)) && // This condition is already applied
+              // The direct mapping is now correct
+              (
                 <div
                   key={platform.platform}
                   className={`w-3 h-3 rounded-full ${platform.color}`}
