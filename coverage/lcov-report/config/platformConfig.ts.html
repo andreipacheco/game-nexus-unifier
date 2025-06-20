@@ -3,7 +3,7 @@
 <html lang="en">
 
 <head>
-    <title>Code coverage report for lib/utils.ts</title>
+    <title>Code coverage report for config/platformConfig.ts</title>
     <meta charset="utf-8" />
     <link rel="stylesheet" href="../prettify.css" />
     <link rel="stylesheet" href="../base.css" />
@@ -19,7 +19,7 @@
 <body>
 <div class='wrapper'>
     <div class='pad1'>
-        <h1><a href="../index.html">All files</a> / <a href="index.html">lib</a> utils.ts</h1>
+        <h1><a href="../index.html">All files</a> / <a href="index.html">config</a> platformConfig.ts</h1>
         <div class='clearfix'>
 
             <div class='fl pad1y space-right2'>
@@ -39,7 +39,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">100% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>1/1</span>
+                <span class='fraction'>0/0</span>
             </div>
 
 
@@ -69,18 +69,21 @@
 <a name='L4'></a><a href='#L4'>4</a>
 <a name='L5'></a><a href='#L5'>5</a>
 <a name='L6'></a><a href='#L6'>6</a>
-<a name='L7'></a><a href='#L7'>7</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L7'></a><a href='#L7'>7</a>
+<a name='L8'></a><a href='#L8'>8</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">125x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">import { clsx, type ClassValue } from "clsx"
-import { twMerge } from "tailwind-merge"
-&nbsp;
-export function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs))
-}
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">export const platformInfo = {
+  steam: { name: 'Steam', color: 'bg-blue-600', icon: '🟦' },
+  epic: { name: 'Epic Games', color: 'bg-gray-800', icon: '⚫' },
+  xbox: { name: 'Xbox', color: 'bg-green-600', icon: '🟢' },
+  gog: { name: 'GOG', color: 'bg-purple-600', icon: '🟣' },
+  psn: { name: 'PlayStation Network', color: 'bg-blue-700', icon: '🎮' }
+};
 &nbsp;</pre></td></tr></table></pre>
 
                 <div class='push'></div><!-- for sticky footer -->

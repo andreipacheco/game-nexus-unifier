@@ -40,6 +40,11 @@ const UserSchema = new mongoose.Schema({
     type: String,
     sparse: true,
   },
+  xuid: {
+    type: String,
+    unique: true,
+    sparse: true,
+  },
   personaName: {
     type: String,
     trim: true,

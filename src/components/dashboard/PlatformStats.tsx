@@ -23,7 +23,7 @@ export const PlatformStats = ({ games }: PlatformStatsProps) => {
     0
   );
 
-  const installedGames = games.filter(game => game.status === 'installed').length;
+  // const installedGames = games.filter(game => game.status === 'installed').length; // Removed as per request
 
   const platformStats = Object.entries(platformInfo).map(([key, info]) => {
     const platformGames = games.filter(game => game.platform === key);
@@ -46,9 +46,7 @@ export const PlatformStats = ({ games }: PlatformStatsProps) => {
         </CardHeader>
         <CardContent>
           <div className="text-2xl font-bold">{totalGames}</div>
-          <p className="text-xs text-muted-foreground">
-            {installedGames} installed
-          </p>
+          {/* Removed installed games count line */}
         </CardContent>
       </Card>
 

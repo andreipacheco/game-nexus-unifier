@@ -3,6 +3,9 @@ const router = express.Router();
 const bcrypt = require('bcrypt');
 const User = require('../models/User'); // Import User model
 const logger = require('../config/logger');
+const PsnGame = require('../models/PsnGame'); // Import PsnGame model
+const SteamGame = require('../models/SteamGame'); // Import SteamGame model
+const XboxGame = require('../models/XboxGame'); // Import XboxGame model
 
 // Middleware to ensure user is authenticated
 const ensureAuthenticated = (req, res, next) => {
@@ -88,3 +91,110 @@ router.post('/change-password', ensureAuthenticated, async (req, res) => {
 });
 
 module.exports = router;
+
+// GET /api/user/stats - Fetches consolidated game statistics for the authenticated user
+router.get('/stats', ensureAuthenticated, async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const steamId = req.user.steamId;
+    const xuid = req.user.xuid; // This might be undefined, and that's okay
+
+    let steamGames = [];
+    let psnGames = [];
+    let xboxGames = [];
+
+    // Fetch Steam games
+    if (steamId) {
+      steamGames = await SteamGame.find({ steamId: steamId });
+      logger.info(`Fetched ${steamGames.length} Steam games for user ${userId}`);
+    } else {
+      logger.info(`No Steam ID found for user ${userId}, skipping Steam games fetch.`);
+    }
+
+    // Fetch PSN games
+    // Assuming PsnGame stores a reference to the User model's _id
+    psnGames = await PsnGame.find({ userId: userId });
+    logger.info(`Fetched ${psnGames.length} PSN games for user ${userId}`);
+
+    // Fetch Xbox games
+    if (xuid) {
+      xboxGames = await XboxGame.find({ xuid: xuid });
+      logger.info(`Fetched ${xboxGames.length} Xbox games for user ${userId}`);
+    } else {
+      logger.info(`No XUID found for user ${userId}, skipping Xbox games fetch.`);
+    }
+
+    // Transformation functions
+    const transformSteamGame = (game) => ({
+      id: String(game.appId),
+      appId: String(game.appId),
+      title: game.name || 'Unknown Title',
+      platform: 'steam',
+      coverImage: game.imgIconURL || game.imgLogoURL || 'default_steam_cover.png', // Ensure you have a default image path or URL
+      playtime: game.playtimeForever ? game.playtimeForever / 60 : 0,
+      lastPlayed: '', // Steam API via steamwebapi node package doesn't provide this directly for all games
+      achievements: {
+        unlocked: game.achievements && game.achievements.achieved ? game.achievements.achieved : 0, //old steam-games field was achieved
+        total: game.achievements && game.achievements.total ? game.achievements.total : 0, //old steam-games field was total
+      },
+      status: 'not_installed', // This info is not available from the basic game list
+      genre: [], // Not available in basic Steam game details
+      releaseYear: 0, // Not available in basic Steam game details
+    });
+
+    const transformPsnGame = (game) => ({
+      id: game.npCommunicationId,
+      appId: game.npCommunicationId,
+      title: game.trophyTitleName || 'Unknown Title',
+      platform: 'psn',
+      coverImage: game.trophyTitleIconUrl || 'default_psn_cover.png',
+      playtime: 0, // PSN API typically doesn't provide playtime easily for all games
+      lastPlayed: game.lastUpdatedDateTime ? new Date(game.lastUpdatedDateTime).toISOString() : '',
+      achievements: {
+        unlocked: (game.earnedTrophies?.bronze || 0) +
+                  (game.earnedTrophies?.silver || 0) +
+                  (game.earnedTrophies?.gold || 0) +
+                  (game.earnedTrophies?.platinum || 0),
+        total: (game.definedTrophies?.bronze || 0) +
+               (game.definedTrophies?.silver || 0) +
+               (game.definedTrophies?.gold || 0) +
+               (game.definedTrophies?.platinum || 0),
+      },
+      status: 'not_installed',
+      genre: [],
+      releaseYear: 0,
+    });
+
+    const transformXboxGame = (game) => ({
+      id: String(game.titleId),
+      appId: String(game.titleId),
+      title: game.name || 'Unknown Title',
+      platform: 'xbox',
+      coverImage: game.displayImage || 'default_xbox_cover.png',
+      playtime: 0, // Xbox API might provide this, but not in all contexts
+      lastPlayed: game.lastUpdated ? new Date(game.lastUpdated).toISOString() : '',
+      achievements: {
+        unlocked: game.achievements?.currentAchievements || 0,
+        total: game.achievements?.totalAchievements || 0,
+        currentGamerscore: game.achievements?.currentGamerscore || 0,
+        totalGamerscore: game.achievements?.totalGamerscore || 0,
+      },
+      status: 'not_installed',
+      genre: [],
+      releaseYear: 0,
+    });
+
+    const transformedSteamGames = steamGames.map(transformSteamGame);
+    const transformedPsnGames = psnGames.map(transformPsnGame);
+    const transformedXboxGames = xboxGames.map(transformXboxGame);
+
+    // Consolidate all transformed games into a single array
+    const allGames = [...transformedSteamGames, ...transformedPsnGames, ...transformedXboxGames];
+    logger.info(`Total consolidated and transformed games fetched for user ${userId}: ${allGames.length}`);
+
+    res.json({ games: allGames });
+  } catch (error) {
+    logger.error('Error fetching user game stats:', { userId: req.user._id, error: error.message, stack: error.stack });
+    res.status(500).json({ message: 'An error occurred while fetching game statistics.' });
+  }
+});
