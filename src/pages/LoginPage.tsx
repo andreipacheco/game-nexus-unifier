@@ -28,7 +28,8 @@ const LoginPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   const handleGoogleLogin = () => {
-    window.location.href = 'http://localhost:3000/auth/google';
+    // Use relative path for Google login
+    window.location.href = '/auth/google';
   };
 
   const validateRegistration = (): boolean => {
@@ -61,7 +62,8 @@ const LoginPage: React.FC = () => {
     }
     setIsLoginLoading(true);
     try {
-      const response = await fetch('http://localhost:3000/auth/login', {
+      // Use relative path for login API call
+      const response = await fetch('/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: loginEmail, password: loginPassword }),
@@ -91,7 +93,8 @@ const LoginPage: React.FC = () => {
     }
     setIsRegisterLoading(true);
     try {
-      const response = await fetch('http://localhost:3000/auth/register', {
+      // Use relative path for register API call
+      const response = await fetch('/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: regName, email: regEmail, password: regPassword }),
