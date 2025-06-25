@@ -2,7 +2,8 @@
 
 ## Visão Geral
 
-O **Game Nexus Unifier** é uma plataforma para unificar, visualizar e gerenciar bibliotecas de jogos de múltiplas plataformas, com integração direta à Steam e suporte para outras plataformas (ex: Epic, GOG, PlayStation, Xbox, Nintendo Switch). O sistema oferece visualização detalhada dos jogos, busca avançada, filtros por plataforma, caching inteligente de dados, e autenticação via Google.
+O **Game Nexus Unifier** é uma plataforma para unificar, visualizar e gerenciar bibliotecas de jogos de múltiplas plataformas, com integração direta à Steam e suporte para outras plataformas (ex: Epic, GOG, PlayStation, Xbox, Nintendo Switch). O sistema oferece visualização detalhada dos jogos, busca avançada, filtros por plataforma, caching inteligente de dados, e autenticação via Google. 
+Persistência de dados com Mongo Db.
 
 ---
 
@@ -26,7 +27,7 @@ Autenticação via psn-api, importação automática da biblioteca de jogos, exi
   Mensagens claras de erro e carregamento para integração Steam e outras operações.
 - **Configuração de Conexões de Plataforma:**  
   Possibilidade de conectar/desconectar plataformas e reconfigurar integrações.
-- **Deploy facilitado via Lovable:**  
+- **Deploy facilitado via Netlify:**  
   Deploy instantâneo e integração com domínio customizado.
 - **Login com Google**
   Google OAuth Credentials
@@ -56,7 +57,7 @@ Autenticação via psn-api, importação automática da biblioteca de jogos, exi
 
 Pré-requisitos:  
 - Node.js & npm instalados ([instale com nvm](https://github.com/nvm-sh/nvm#installing-and-updating))
-- MongoDB rodando localmente ou em nuvem
+- MongoDB em nuvem
 
 ```sh
 # Clone o repositório
