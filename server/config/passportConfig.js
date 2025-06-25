@@ -8,23 +8,54 @@ const passport = require('passport');
 const LocalStrategy = require('passport-local').Strategy;
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const SteamStrategy = require('passport-steam').Strategy;
-const User = require('../models/User');
+const User = require('../models/User'); // Adjusted path assuming User.js is in ../models/
 const bcrypt = require('bcrypt'); // For password comparison
-const logger = require('./logger');
+const logger = require('./logger'); // Adjusted path assuming logger.js is in the same dir (./logger)
+
+// Determine if running in a production environment (Netlify sets NODE_ENV to 'production')
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
+
+// Get the base URL
+// Netlify provides process.env.URL as the canonical URL of the deployed site.
+// process.env.DEPLOY_PRIME_URL is for deploy previews. Use URL for the main site.
+// Fallback to your custom APP_BASE_URL if URL is not available (should not happen on Netlify).
+// Then fallback to localhost for development.
+let determinedAppBaseUrl;
+if (IS_PRODUCTION) {
+    determinedAppBaseUrl = process.env.URL || process.env.APP_BASE_URL;
+} else {
+    // For development, ensure this matches your backend's listening URL if different from frontend
+    determinedAppBaseUrl = process.env.APP_BASE_URL || 'http://localhost:3000';
+}
+
+// If for some reason determinedAppBaseUrl is still not set, provide a final fallback.
+const effectiveAppBaseUrl = determinedAppBaseUrl || 'http://localhost:3000';
+
+// Log the determined URL for debugging during startup (check Netlify function logs)
+// Ensure logger is available here or use console.log if logger is initialized later.
+// Checking if logger and logger.info are defined before using them at the module's top level
+if (logger && typeof logger.info === 'function') {
+    logger.info(`Effective Base URL for OAuth callbacks: ${effectiveAppBaseUrl}`);
+    logger.info(`NODE_ENV: ${process.env.NODE_ENV}`);
+    logger.info(`Netlify URL (process.env.URL): ${process.env.URL}`);
+    logger.info(`Custom APP_BASE_URL (process.env.APP_BASE_URL): ${process.env.APP_BASE_URL}`);
+} else {
+    // Fallback to console.log if logger is not yet available or not configured
+    console.log(`[passportConfig] Effective Base URL for OAuth callbacks: ${effectiveAppBaseUrl}`);
+    console.log(`[passportConfig] NODE_ENV: ${process.env.NODE_ENV}`);
+    console.log(`[passportConfig] Netlify URL (process.env.URL): ${process.env.URL}`);
+    console.log(`[passportConfig] Custom APP_BASE_URL (process.env.APP_BASE_URL): ${process.env.APP_BASE_URL}`);
+}
+
 
 function configurePassport(passportInstance) {
     // Steam Strategy Configuration
-    if (!process.env.STEAM_API_KEY) { // Simplified check, APP_BASE_URL might not be needed for API key alone
+    if (!process.env.STEAM_API_KEY) {
         logger.warn('STEAM_API_KEY is not defined. Passport SteamStrategy will not be available.');
     } else {
-        const IS_PRODUCTION_STEAM = process.env.NODE_ENV === 'production';
-        const NETLIFY_URL_STEAM = process.env.URL;
-        const APP_BASE_URL_FROM_ENV_STEAM = process.env.APP_BASE_URL;
-        const effectiveAppBaseUrlSteam = IS_PRODUCTION_STEAM && NETLIFY_URL_STEAM ? NETLIFY_URL_STEAM : (APP_BASE_URL_FROM_ENV_STEAM || 'http://localhost:3000');
-
         passportInstance.use(new SteamStrategy({
-            returnURL: `${effectiveAppBaseUrlSteam}/auth/steam/return`,
-            realm: effectiveAppBaseUrlSteam,
+            returnURL: `${effectiveAppBaseUrl}/auth/steam/return`,
+            realm: effectiveAppBaseUrl,
             apiKey: process.env.STEAM_API_KEY
         },
         async function(identifier, profile, done) {
@@ -122,15 +153,10 @@ function configurePassport(passportInstance) {
     if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
         logger.warn('GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET is not defined. Passport GoogleStrategy will not be available.');
     } else {
-        const IS_PRODUCTION_GOOGLE = process.env.NODE_ENV === 'production';
-        const NETLIFY_URL_GOOGLE = process.env.URL;
-        const APP_BASE_URL_FROM_ENV_GOOGLE = process.env.APP_BASE_URL;
-        const effectiveAppBaseUrlGoogle = IS_PRODUCTION_GOOGLE && NETLIFY_URL_GOOGLE ? NETLIFY_URL_GOOGLE : (APP_BASE_URL_FROM_ENV_GOOGLE || 'http://localhost:3000');
-
         passportInstance.use(new GoogleStrategy({
             clientID: process.env.GOOGLE_CLIENT_ID,
             clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-            callbackURL: `${effectiveAppBaseUrlGoogle}/auth/google/callback`,
+            callbackURL: `${effectiveAppBaseUrl}/auth/google/callback`, // Use the common effectiveAppBaseUrl
             scope: ['profile', 'email'] // Ensure scope is passed if not default
         },
         async (accessToken, refreshToken, profile, done) => {
