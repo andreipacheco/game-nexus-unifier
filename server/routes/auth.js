@@ -84,76 +84,181 @@ router.post('/login', (req, res, next) => {
 // --- Google Authentication Routes ---
 
 // Initiates Google authentication flow
-router.get('/google', passport.authenticate('google', {
-    scope: ['profile', 'email'] // Request access to profile and email
-}));
+router.get('/google', (req, res, next) => {
+    const IS_PRODUCTION = process.env.NODE_ENV === 'production';
+    const NETLIFY_URL = process.env.URL;
+    const APP_BASE_URL_FROM_ENV = process.env.APP_BASE_URL;
+    const FRONTEND_DEV_URL = 'http://localhost:8080';
+    let effectiveAppBaseUrl;
+
+    if (IS_PRODUCTION && NETLIFY_URL) effectiveAppBaseUrl = NETLIFY_URL;
+    else if (IS_PRODUCTION && APP_BASE_URL_FROM_ENV) effectiveAppBaseUrl = APP_BASE_URL_FROM_ENV;
+    else if (!IS_PRODUCTION) effectiveAppBaseUrl = FRONTEND_DEV_URL;
+    else effectiveAppBaseUrl = APP_BASE_URL_FROM_ENV || '/';
+
+    passport.authenticate('google', {
+        scope: ['profile', 'email'], // Request access to profile and email
+        // failureRedirect can be set here if needed, for errors during the *initial* redirect to Google.
+        // For example, if the strategy itself is misconfigured for the initiation part.
+        // However, most failures occur on the callback.
+        // If a failureRedirect is used here, it should also use effectiveAppBaseUrl.
+        // For now, assuming failures are primarily handled at callback, or passport handles initial errors.
+    })(req, res, next);
+});
 
 // Handles the callback from Google after authentication attempt
-router.get('/google/callback',
+router.get('/google/callback', (req, res, next) => {
+    const IS_PRODUCTION_CB = process.env.NODE_ENV === 'production';
+    const NETLIFY_URL_CB = process.env.URL;
+    const APP_BASE_URL_FROM_ENV_CB = process.env.APP_BASE_URL;
+    const FRONTEND_DEV_URL_CB = 'http://localhost:8080';
+    let effectiveAppBaseUrlCb; // Base URL for failure redirects from this callback handler
+
+    if (IS_PRODUCTION_CB && NETLIFY_URL_CB) effectiveAppBaseUrlCb = NETLIFY_URL_CB;
+    else if (IS_PRODUCTION_CB && APP_BASE_URL_FROM_ENV_CB) effectiveAppBaseUrlCb = APP_BASE_URL_FROM_ENV_CB;
+    else if (!IS_PRODUCTION_CB) effectiveAppBaseUrlCb = FRONTEND_DEV_URL_CB;
+    else effectiveAppBaseUrlCb = APP_BASE_URL_FROM_ENV_CB || '/';
+
     passport.authenticate('google', {
-        failureRedirect: `${(process.env.NODE_ENV === 'production' && process.env.URL) || process.env.APP_BASE_URL || '/'}/login?error=google_auth_failed`, // Redirect on failure
-        failureMessage: true // Store failure message in req.session.messages
-    }),
-    (req, res) => {
-        // Successful authentication. req.user is populated by Passport's verify callback.
-        logger.info(`User authenticated via Google: ${req.user ? (req.user.id || req.user.googleId || req.user.email) : 'No user object found after auth'}`);
-        // Be cautious logging entire session in production due to sensitive data.
-        // For debugging, this can be very helpful.
-        if (req.session) {
-            logger.info(`Session details after Google auth: ${JSON.stringify(req.session, null, 2)}`);
-        } else {
-            logger.warn('No session object found on req after Google auth.');
+        failureRedirect: `${effectiveAppBaseUrlCb}/login?error=google_auth_failed_callback`, // Dynamic failure redirect
+        failureMessage: true
+    }, (err, user, info) => { // Custom callback for passport.authenticate
+        if (err) {
+            logger.error('Error in Google callback from passport.authenticate', { error: err, info });
+            // Ensure this redirect also uses the correct base URL
+            return res.redirect(`${effectiveAppBaseUrlCb}/login?error=google_auth_exception`);
         }
-        logger.info(`req.user details after Google auth: ${JSON.stringify(req.user, null, 2)}`);
+        if (!user) {
+            logger.warn('Google authentication failed, no user returned.', { info });
+            const failureQueryParam = (info && info.message ? encodeURIComponent(info.message) : 'google_auth_failed_nouser');
+            // Ensure this redirect also uses the correct base URL
+            return res.redirect(`${effectiveAppBaseUrlCb}/login?error=${failureQueryParam}`);
+        }
+        // User is authenticated, log them in
+        req.login(user, (loginErr) => {
+            if (loginErr) {
+                logger.error('Error logging in user after Google auth:', { userId: user.id, error: loginErr });
+                // Ensure this redirect also uses the correct base URL
+                return res.redirect(`${effectiveAppBaseUrlCb}/login?error=google_login_error`);
+            }
+            // Successfully logged in. Now determine redirect for success.
+            logger.info(`User authenticated and logged in via Google: ${user.id || user.googleId || user.email}`);
 
-        // Determine the base URL for redirection
-        const IS_PRODUCTION = process.env.NODE_ENV === 'production';
-        const NETLIFY_URL = process.env.URL;
-        const APP_BASE_URL_FROM_ENV = process.env.APP_BASE_URL;
-        const effectiveAppBaseUrl = IS_PRODUCTION && NETLIFY_URL ? NETLIFY_URL : (APP_BASE_URL_FROM_ENV || '/');
+            // Base URL for SUCCESS redirect (to dashboard) - this logic is already updated from previous steps
+            const IS_PRODUCTION_SUCCESS = process.env.NODE_ENV === 'production';
+            const NETLIFY_URL_SUCCESS = process.env.URL;
+            const APP_BASE_URL_FROM_ENV_SUCCESS = process.env.APP_BASE_URL;
+            const FRONTEND_DEV_URL_SUCCESS = 'http://localhost:8080';
+            let effectiveAppBaseUrlSuccess;
 
-        // Redirect to frontend dashboard
-        const redirectTo = `${effectiveAppBaseUrl}/dashboard?google_login_success=true`;
-        logger.info(`Redirecting to: ${redirectTo}`);
-        res.redirect(redirectTo);
-    }
-);
+            if (IS_PRODUCTION_SUCCESS && NETLIFY_URL_SUCCESS) effectiveAppBaseUrlSuccess = NETLIFY_URL_SUCCESS;
+            else if (IS_PRODUCTION_SUCCESS && APP_BASE_URL_FROM_ENV_SUCCESS) effectiveAppBaseUrlSuccess = APP_BASE_URL_FROM_ENV_SUCCESS;
+            else if (!IS_PRODUCTION_SUCCESS) effectiveAppBaseUrlSuccess = FRONTEND_DEV_URL_SUCCESS;
+            else effectiveAppBaseUrlSuccess = APP_BASE_URL_FROM_ENV_SUCCESS || '/';
+
+            const redirectTo = `${effectiveAppBaseUrlSuccess}/dashboard?google_login_success=true`;
+            logger.info(`Redirecting to: ${redirectTo}`);
+            return res.redirect(redirectTo);
+        });
+    })(req, res, next); // Invoke passport.authenticate middleware
+});
 
 // --- Steam Authentication Routes ---
 
 // Initiates the Steam authentication flow using Passport
-router.get('/steam', passport.authenticate('steam', {
-    failureRedirect: `${(process.env.NODE_ENV === 'production' && process.env.URL) || process.env.APP_BASE_URL || '/'}/login?error=steam_auth_init_failed` // Redirect to a login page with error
-}));
+router.get('/steam', (req, res, next) => {
+    const IS_PRODUCTION = process.env.NODE_ENV === 'production';
+    const NETLIFY_URL = process.env.URL;
+    const APP_BASE_URL_FROM_ENV = process.env.APP_BASE_URL;
+    const FRONTEND_DEV_URL = 'http://localhost:8080';
+    let effectiveAppBaseUrl;
+
+    if (IS_PRODUCTION && NETLIFY_URL) effectiveAppBaseUrl = NETLIFY_URL;
+    else if (IS_PRODUCTION && APP_BASE_URL_FROM_ENV) effectiveAppBaseUrl = APP_BASE_URL_FROM_ENV;
+    else if (!IS_PRODUCTION) effectiveAppBaseUrl = FRONTEND_DEV_URL;
+    else effectiveAppBaseUrl = APP_BASE_URL_FROM_ENV || '/';
+
+    passport.authenticate('steam', {
+        failureRedirect: `${effectiveAppBaseUrl}/login?error=steam_auth_init_failed`
+    })(req, res, next);
+});
 
 // Handles the callback from Steam after authentication attempt
-router.get('/steam/return',
+router.get('/steam/return', (req, res, next) => {
+    const IS_PRODUCTION_CB = process.env.NODE_ENV === 'production';
+    const NETLIFY_URL_CB = process.env.URL;
+    const APP_BASE_URL_FROM_ENV_CB = process.env.APP_BASE_URL;
+    const FRONTEND_DEV_URL_CB = 'http://localhost:8080';
+    let effectiveAppBaseUrlCb; // Base URL for failure redirects from this callback handler
+
+    if (IS_PRODUCTION_CB && NETLIFY_URL_CB) effectiveAppBaseUrlCb = NETLIFY_URL_CB;
+    else if (IS_PRODUCTION_CB && APP_BASE_URL_FROM_ENV_CB) effectiveAppBaseUrlCb = APP_BASE_URL_FROM_ENV_CB;
+    else if (!IS_PRODUCTION_CB) effectiveAppBaseUrlCb = FRONTEND_DEV_URL_CB;
+    else effectiveAppBaseUrlCb = APP_BASE_URL_FROM_ENV_CB || '/';
+
     passport.authenticate('steam', {
-        failureRedirect: `${(process.env.NODE_ENV === 'production' && process.env.URL) || process.env.APP_BASE_URL || '/'}/login?error=steam_auth_callback_failed`, // Redirect on failure
+        failureRedirect: `${effectiveAppBaseUrlCb}/login?error=steam_auth_callback_failed`, // Dynamic failure redirect
         failureMessage: true
-    }),
-    (req, res) => {
-        // Successful authentication. req.user is populated by Passport's verify callback.
-        logger.info(`Steam authentication successful for user: ${req.user.steamId} - ${req.user.personaName}. Redirecting to dashboard.`);
+    }, (err, user, info) => { // Custom callback for passport.authenticate
+        if (err) {
+            logger.error('Error in Steam callback from passport.authenticate', { error: err, info });
+            return res.redirect(`${effectiveAppBaseUrlCb}/login?error=steam_auth_exception`);
+        }
+        if (!user) {
+            logger.warn('Steam authentication failed, no user returned.', { info });
+            const failureQueryParam = (info && info.message ? encodeURIComponent(info.message) : 'steam_auth_failed_nouser');
+            return res.redirect(`${effectiveAppBaseUrlCb}/login?error=${failureQueryParam}`);
+        }
+        // User is authenticated, log them in
+        req.login(user, (loginErr) => {
+            if (loginErr) {
+                logger.error('Error logging in user after Steam auth:', { userId: user.steamId, error: loginErr });
+                return res.redirect(`${effectiveAppBaseUrlCb}/login?error=steam_login_error`);
+            }
+            // Successfully logged in. Now determine redirect for success.
+            logger.info(`Steam authentication successful for user: ${user.steamId} - ${user.personaName}. Redirecting to dashboard.`);
 
-        const IS_PRODUCTION = process.env.NODE_ENV === 'production';
-        const NETLIFY_URL = process.env.URL;
-        const APP_BASE_URL_FROM_ENV = process.env.APP_BASE_URL;
-        const effectiveAppBaseUrl = IS_PRODUCTION && NETLIFY_URL ? NETLIFY_URL : (APP_BASE_URL_FROM_ENV || '/');
+            // Base URL for SUCCESS redirect (to dashboard) - this logic is already updated from previous steps
+            const IS_PRODUCTION_SUCCESS = process.env.NODE_ENV === 'production';
+            const NETLIFY_URL_SUCCESS = process.env.URL;
+            const APP_BASE_URL_FROM_ENV_SUCCESS = process.env.APP_BASE_URL;
+            const FRONTEND_DEV_URL_SUCCESS = 'http://localhost:8080';
+            let effectiveAppBaseUrlSuccess;
 
-        const redirectTo = `${effectiveAppBaseUrl}/dashboard?steam_login_success=true&steamid=${req.user.steamId}`;
-        res.redirect(redirectTo);
-    }
-);
+            if (IS_PRODUCTION_SUCCESS && NETLIFY_URL_SUCCESS) effectiveAppBaseUrlSuccess = NETLIFY_URL_SUCCESS;
+            else if (IS_PRODUCTION_SUCCESS && APP_BASE_URL_FROM_ENV_SUCCESS) effectiveAppBaseUrlSuccess = APP_BASE_URL_FROM_ENV_SUCCESS;
+            else if (!IS_PRODUCTION_SUCCESS) effectiveAppBaseUrlSuccess = FRONTEND_DEV_URL_SUCCESS;
+            else effectiveAppBaseUrlSuccess = APP_BASE_URL_FROM_ENV_SUCCESS || '/';
+
+            const redirectTo = `${effectiveAppBaseUrlSuccess}/dashboard?steam_login_success=true&steamid=${user.steamId}`;
+            logger.info(`Redirecting to: ${redirectTo}`);
+            return res.redirect(redirectTo);
+        });
+    })(req, res, next); // Invoke passport.authenticate middleware
+});
 
 // --- General Logout Route ---
 
 // Logout route
 router.get('/logout', async (req, res, next) => { // Made async
     const IS_PRODUCTION = process.env.NODE_ENV === 'production';
-    const NETLIFY_URL = process.env.URL;
+    const NETLIFY_URL = process.env.URL; // Specific to Netlify's build/runtime environment
     const APP_BASE_URL_FROM_ENV = process.env.APP_BASE_URL;
-    const effectiveAppBaseUrl = IS_PRODUCTION && NETLIFY_URL ? NETLIFY_URL : (APP_BASE_URL_FROM_ENV || '/');
+    const FRONTEND_DEV_URL = 'http://localhost:8080'; // Vite default
+
+    let effectiveAppBaseUrl;
+    if (IS_PRODUCTION && NETLIFY_URL) {
+        effectiveAppBaseUrl = NETLIFY_URL; // Netlify's deployed URL
+    } else if (IS_PRODUCTION && APP_BASE_URL_FROM_ENV) {
+        // Production but not on Netlify (e.g., other hosting)
+        effectiveAppBaseUrl = APP_BASE_URL_FROM_ENV;
+    } else if (!IS_PRODUCTION) {
+        // Local development
+        effectiveAppBaseUrl = FRONTEND_DEV_URL;
+    } else {
+        // Fallback for production if nothing else is set (less ideal but ensures a base)
+        effectiveAppBaseUrl = APP_BASE_URL_FROM_ENV || '/';
+    }
 
     if (req.user) {
         try {
