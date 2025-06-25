@@ -17,9 +17,14 @@ function configurePassport(passportInstance) {
     if (!process.env.STEAM_API_KEY) { // Simplified check, APP_BASE_URL might not be needed for API key alone
         logger.warn('STEAM_API_KEY is not defined. Passport SteamStrategy will not be available.');
     } else {
+        const IS_PRODUCTION_STEAM = process.env.NODE_ENV === 'production';
+        const NETLIFY_URL_STEAM = process.env.URL;
+        const APP_BASE_URL_FROM_ENV_STEAM = process.env.APP_BASE_URL;
+        const effectiveAppBaseUrlSteam = IS_PRODUCTION_STEAM && NETLIFY_URL_STEAM ? NETLIFY_URL_STEAM : (APP_BASE_URL_FROM_ENV_STEAM || 'http://localhost:3000');
+
         passportInstance.use(new SteamStrategy({
-            returnURL: process.env.APP_BASE_URL ? `${process.env.APP_BASE_URL}/auth/steam/return` : 'http://localhost:3000/auth/steam/return', // Updated port
-            realm: process.env.APP_BASE_URL || 'http://localhost:3000', // Updated port
+            returnURL: `${effectiveAppBaseUrlSteam}/auth/steam/return`,
+            realm: effectiveAppBaseUrlSteam,
             apiKey: process.env.STEAM_API_KEY
         },
         async function(identifier, profile, done) {
@@ -117,10 +122,15 @@ function configurePassport(passportInstance) {
     if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
         logger.warn('GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET is not defined. Passport GoogleStrategy will not be available.');
     } else {
+        const IS_PRODUCTION_GOOGLE = process.env.NODE_ENV === 'production';
+        const NETLIFY_URL_GOOGLE = process.env.URL;
+        const APP_BASE_URL_FROM_ENV_GOOGLE = process.env.APP_BASE_URL;
+        const effectiveAppBaseUrlGoogle = IS_PRODUCTION_GOOGLE && NETLIFY_URL_GOOGLE ? NETLIFY_URL_GOOGLE : (APP_BASE_URL_FROM_ENV_GOOGLE || 'http://localhost:3000');
+
         passportInstance.use(new GoogleStrategy({
             clientID: process.env.GOOGLE_CLIENT_ID,
             clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-            callbackURL: process.env.APP_BASE_URL ? `${process.env.APP_BASE_URL}/auth/google/callback` : 'http://localhost:3000/auth/google/callback', // Updated port
+            callbackURL: `${effectiveAppBaseUrlGoogle}/auth/google/callback`,
             scope: ['profile', 'email'] // Ensure scope is passed if not default
         },
         async (accessToken, refreshToken, profile, done) => {

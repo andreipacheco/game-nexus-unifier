@@ -91,7 +91,7 @@ router.get('/google', passport.authenticate('google', {
 // Handles the callback from Google after authentication attempt
 router.get('/google/callback',
     passport.authenticate('google', {
-        failureRedirect: `${process.env.APP_BASE_URL || '/'}/login?error=google_auth_failed`, // Redirect on failure
+        failureRedirect: `${(process.env.NODE_ENV === 'production' && process.env.URL) || process.env.APP_BASE_URL || '/'}/login?error=google_auth_failed`, // Redirect on failure
         failureMessage: true // Store failure message in req.session.messages
     }),
     (req, res) => {
@@ -106,8 +106,14 @@ router.get('/google/callback',
         }
         logger.info(`req.user details after Google auth: ${JSON.stringify(req.user, null, 2)}`);
 
+        // Determine the base URL for redirection
+        const IS_PRODUCTION = process.env.NODE_ENV === 'production';
+        const NETLIFY_URL = process.env.URL;
+        const APP_BASE_URL_FROM_ENV = process.env.APP_BASE_URL;
+        const effectiveAppBaseUrl = IS_PRODUCTION && NETLIFY_URL ? NETLIFY_URL : (APP_BASE_URL_FROM_ENV || '/');
+
         // Redirect to frontend dashboard
-        const redirectTo = `${process.env.APP_BASE_URL || '/'}/dashboard?google_login_success=true`;
+        const redirectTo = `${effectiveAppBaseUrl}/dashboard?google_login_success=true`;
         logger.info(`Redirecting to: ${redirectTo}`);
         res.redirect(redirectTo);
     }
@@ -116,28 +122,26 @@ router.get('/google/callback',
 // --- Steam Authentication Routes ---
 
 // Initiates the Steam authentication flow using Passport
-// The 'steam' string refers to the strategy name defined in passportConfig.js
-// If passport.use('steam', new SteamStrategy(...)) was used, then 'steam' is correct.
-// If passport.use(new SteamStrategy(...)) was used (no name given), Passport defaults to 'openid'
-// for OpenID based strategies, but passport-steam usually registers as 'steam'.
 router.get('/steam', passport.authenticate('steam', {
-    failureRedirect: `${process.env.APP_BASE_URL || '/'}/login?error=steam_auth_init_failed` // Redirect to a login page with error
+    failureRedirect: `${(process.env.NODE_ENV === 'production' && process.env.URL) || process.env.APP_BASE_URL || '/'}/login?error=steam_auth_init_failed` // Redirect to a login page with error
 }));
 
 // Handles the callback from Steam after authentication attempt
 router.get('/steam/return',
     passport.authenticate('steam', {
-        failureRedirect: `${process.env.APP_BASE_URL || '/'}/login?error=steam_auth_callback_failed`, // Redirect on failure
+        failureRedirect: `${(process.env.NODE_ENV === 'production' && process.env.URL) || process.env.APP_BASE_URL || '/'}/login?error=steam_auth_callback_failed`, // Redirect on failure
         failureMessage: true
     }),
     (req, res) => {
         // Successful authentication. req.user is populated by Passport's verify callback.
-        // The verify callback in passportConfig.js already handles User.findOrCreate/update.
         logger.info(`Steam authentication successful for user: ${req.user.steamId} - ${req.user.personaName}. Redirecting to dashboard.`);
 
-        // Redirect to frontend dashboard, pass necessary info if needed (or rely on session)
-        // Ensure APP_BASE_URL is defined in your .env
-        const redirectTo = `${process.env.APP_BASE_URL || '/'}/dashboard?steam_login_success=true&steamid=${req.user.steamId}`;
+        const IS_PRODUCTION = process.env.NODE_ENV === 'production';
+        const NETLIFY_URL = process.env.URL;
+        const APP_BASE_URL_FROM_ENV = process.env.APP_BASE_URL;
+        const effectiveAppBaseUrl = IS_PRODUCTION && NETLIFY_URL ? NETLIFY_URL : (APP_BASE_URL_FROM_ENV || '/');
+
+        const redirectTo = `${effectiveAppBaseUrl}/dashboard?steam_login_success=true&steamid=${req.user.steamId}`;
         res.redirect(redirectTo);
     }
 );
@@ -146,34 +150,36 @@ router.get('/steam/return',
 
 // Logout route
 router.get('/logout', async (req, res, next) => { // Made async
+    const IS_PRODUCTION = process.env.NODE_ENV === 'production';
+    const NETLIFY_URL = process.env.URL;
+    const APP_BASE_URL_FROM_ENV = process.env.APP_BASE_URL;
+    const effectiveAppBaseUrl = IS_PRODUCTION && NETLIFY_URL ? NETLIFY_URL : (APP_BASE_URL_FROM_ENV || '/');
+
     if (req.user) {
         try {
-            // Assuming req.user is the Mongoose User document from deserializeUser.
             req.user.lastLogoutAt = new Date();
             await req.user.save();
             const userIdForLog = req.user.steamId || req.user.googleId || req.user.email || req.user.id;
             logger.info(`Updated lastLogoutAt for user: ${userIdForLog}`);
         } catch (dbError) {
             logger.error('Failed to update lastLogoutAt on logout', { userId: req.user.id, error: dbError });
-            // This error should not prevent logout. Just log it.
         }
     }
 
     req.logout(function(err) {
         if (err) {
             logger.error('Logout error', { error: err });
-            // Redirect to an error page or send an error response
-            return res.redirect(`${process.env.APP_BASE_URL || '/'}/login?error=logout_failed`);
+            return res.redirect(`${effectiveAppBaseUrl}/login?error=logout_failed`);
         }
         req.session.destroy(err => {
             if (err) {
                 logger.error('Session destruction error during logout', { error: err });
-                res.clearCookie('connect.sid'); // Default session cookie name
-                return res.redirect(`${process.env.APP_BASE_URL || '/'}/login?error=session_destroy_failed`);
+                res.clearCookie('connect.sid');
+                return res.redirect(`${effectiveAppBaseUrl}/login?error=session_destroy_failed`);
             }
-            res.clearCookie('connect.sid'); // Ensure cookie is cleared
+            res.clearCookie('connect.sid');
             logger.info('User logged out successfully, session destroyed. Redirecting to home.');
-            res.redirect(process.env.APP_BASE_URL || '/'); // Redirect to home/login page
+            res.redirect(effectiveAppBaseUrl); // Redirect to home/login page
         });
     });
 });
