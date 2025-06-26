@@ -50,6 +50,15 @@ const UserSchema = new mongoose.Schema({
   profileUrl: {
     type: String, // URL to the Steam profile
   },
+  xboxUserId: { // For Xbox User ID (XUID)
+    type: String,
+    unique: true,
+    sparse: true,
+  },
+  xboxGamertag: { // For Xbox Gamertag
+    type: String,
+    sparse: true,
+  },
   lastLoginAt: {
     type: Date,
   },
