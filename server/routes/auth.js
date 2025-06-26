@@ -289,4 +289,108 @@ router.get('/logout', async (req, res, next) => { // Made async
     });
 });
 
+// --- Xbox Connection Route ---
+const axios = require('axios'); // For calling Xbox API
+const XBL_API_KEY = process.env.XBL_API_KEY;
+const XBL_API_BASE_URL = 'https://xbl.io/api/v2';
+
+router.post('/xbox/connect', async (req, res) => {
+    if (!req.user) {
+        return res.status(401).json({ message: 'User not authenticated' });
+    }
+
+    const { xuid } = req.body;
+    if (!xuid) {
+        return res.status(400).json({ message: 'Xbox User ID (XUID) is required.' });
+    }
+
+    try {
+        logger.info(`Attempting to connect Xbox account for user ${req.user.id} with XUID ${xuid}.`);
+
+        // Optional: Verify XUID and get profile details from Xbox Live API
+        let gamertag = req.body.gamertag; // Use provided gamertag if any
+
+        if (XBL_API_KEY) {
+            try {
+                const profileUrl = `${XBL_API_BASE_URL}/account/${xuid}`;
+                logger.debug(`Fetching Xbox profile from: ${profileUrl}`);
+                const response = await axios.get(profileUrl, {
+                    headers: {
+                        'X-Authorization': XBL_API_KEY,
+                        'Accept': 'application/json',
+                        'Accept-Language': 'en-US'
+                    }
+                });
+
+                if (response.data && response.data.profileUsers && response.data.profileUsers.length > 0) {
+                    const profile = response.data.profileUsers[0];
+                    if (profile.settings) {
+                        const gamertagSetting = profile.settings.find(s => s.id === 'Gamertag');
+                        if (gamertagSetting) {
+                            gamertag = gamertagSetting.value;
+                            logger.info(`Successfully fetched Xbox gamertag '${gamertag}' for XUID ${xuid}.`);
+                        }
+                    }
+                } else {
+                    logger.warn(`Could not verify XUID ${xuid} or fetch gamertag. Response was not as expected.`);
+                    // Decide if this is a hard failure or proceed with user-provided/no gamertag
+                    // For now, let's proceed but log it.
+                }
+            } catch (apiError) {
+                logger.error(`Error calling Xbox API to verify XUID ${xuid}:`, {
+                    message: apiError.message,
+                    response: apiError.response ? { status: apiError.response.status, data: apiError.response.data } : null
+                });
+                // If API call fails (e.g. invalid XUID, API key issue), return an error
+                let friendlyMessage = 'Failed to verify Xbox User ID. Please ensure it is correct.';
+                if (apiError.response && apiError.response.status === 404) {
+                    friendlyMessage = 'Xbox User ID (XUID) not found. Please check and try again.';
+                } else if (apiError.response && apiError.response.status === 401) {
+                    friendlyMessage = 'Xbox API request unauthorized. Server configuration issue.';
+                }
+                return res.status(apiError.response?.status || 500).json({ message: friendlyMessage });
+            }
+        } else {
+            logger.warn('XBL_API_KEY not set. Proceeding without Xbox profile verification/gamertag fetch.');
+            if (!gamertag) {
+                // If no API key and no gamertag provided, this is less ideal.
+                // We could make gamertag also required if API key is missing, or use XUID as placeholder.
+                logger.info(`No XBL_API_KEY and no gamertag provided for XUID ${xuid}. Gamertag will be empty.`);
+            }
+        }
+
+        // Check if this XUID is already linked to another user
+        const existingUserWithXuid = await User.findOne({ xboxUserId: xuid, _id: { $ne: req.user.id } });
+        if (existingUserWithXuid) {
+          logger.warn(`User ${req.user.id} attempting to connect XUID ${xuid} that is already in use by user ${existingUserWithXuid._id}.`);
+          return res.status(409).json({ message: 'This Xbox account (XUID) is already linked to a different user account.' });
+        }
+
+        const updatedUser = await User.findByIdAndUpdate(
+            req.user.id,
+            {
+                xboxUserId: xuid,
+                xboxGamertag: gamertag || '', // Store fetched/provided gamertag or empty string
+            },
+            { new: true }
+        ).select('-password -npsso'); // Exclude sensitive fields
+
+        if (!updatedUser) {
+            logger.warn(`User not found during Xbox connect process for ID: ${req.user.id}`);
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        logger.info(`Xbox account ${xuid} (Gamertag: ${gamertag}) successfully connected for user ${req.user.id}.`);
+        const { password, ...userData } = updatedUser.toObject(); // Exclude password for response
+        res.json({
+            message: 'Xbox account connected successfully.',
+            user: userData
+        });
+
+    } catch (error) {
+        logger.error(`Error connecting Xbox account for user ${req.user.id} with XUID ${xuid}:`, error);
+        res.status(500).json({ message: 'Server error during Xbox account connection.' });
+    }
+});
+
 module.exports = router;
