@@ -216,20 +216,32 @@ console.log('[DEBUG] server.js: Static file middleware configured to serve from 
 
 // The "catchall" handler: for any request that doesn't match one above,
 // send back React's index.html file.
-app.get('*', (req, res) => {
+app.get('*', (req, res, next) => { // Added next parameter
   if (!req.path.startsWith('/api') && !req.path.startsWith('/auth')) {
-    res.sendFile(path.join(__dirname, '..', 'dist', 'index.html'));
-    console.log(`[DEBUG] server.js: Served index.html for non-API/auth route: ${req.path}`);
+    const indexPath = path.join(__dirname, '..', 'dist', 'index.html');
+    res.sendFile(indexPath, (err) => {
+      if (err) {
+        logger.error(`Error sending index.html for path ${req.path}:`, err);
+        console.error(`[DEBUG] server.js: Error sending index.html for path ${req.path}:`, err);
+        // If sending file fails, pass the error to the next error handler
+        // This is important for proper error logging and response.
+        // Ensure you have an error handling middleware defined after this.
+        // For now, we'll let Express's default error handler try to manage it.
+        next(err);
+      } else {
+        logger.info(`Successfully served index.html for non-API/auth route: ${req.path}`);
+        console.log(`[DEBUG] server.js: Successfully served index.html for non-API/auth route: ${req.path}`);
+      }
+    });
   } else {
     // If it's an API/auth path that wasn't caught by a specific route,
-    // it means it's a 404 for an API endpoint.
-    // Let Express handle this (it will typically 404 by default if no other middleware sends response)
-    // or add specific 404 handling for API routes if desired.
+    // it means it's a 404 for an API endpoint. Pass to the next handler.
+    logger.info(`API/auth route ${req.path} not found by specific route handlers, passing to next general handler.`);
     console.log(`[DEBUG] server.js: API/auth route ${req.path} not found, passing to next handler.`);
-    // next(); // Optional: if you have a specific API 404 handler later
+    next(); // Explicitly pass to the next middleware/handler (e.g., Express's 404 handler)
   }
 });
-console.log('[DEBUG] server.js: Catch-all route configured.');
+console.log('[DEBUG] server.js: Catch-all route configured with enhanced logging and error handling.');
 
 // const determinedPort = process.env.PORT || 10000; // MOVED EARLIER: Use 10000 as default for Render
 
