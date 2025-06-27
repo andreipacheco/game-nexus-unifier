@@ -12,7 +12,8 @@
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "jest"
+    "test": "jest",
+    "start": "npm run build && npm run start:server"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
