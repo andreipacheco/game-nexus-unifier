@@ -10,6 +10,8 @@ const logger = require('./config/logger');
 dotenv.config();
 console.log('[DEBUG] server.js: dotenv.config() called.');
 
+const determinedPort = process.env.PORT || 10000; // Define port before it's used by main() via IIFE
+
 // Initialize DB and SteamAPI early
 (async () => {
   try {
@@ -229,8 +231,7 @@ app.get('*', (req, res) => {
 });
 console.log('[DEBUG] server.js: Catch-all route configured.');
 
-
-const determinedPort = process.env.PORT || 10000; // Use 10000 as default for Render
+// const determinedPort = process.env.PORT || 10000; // MOVED EARLIER: Use 10000 as default for Render
 
 async function main() {
   console.log('[DEBUG] server.js: main() called. Entered main function.');
