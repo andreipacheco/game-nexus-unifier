@@ -16,6 +16,11 @@ console.log('[DEBUG] server.js: dotenv.config() called.');
     await connectDB(); // Ensure DB is connected early
     console.log('[DEBUG] server.js: Calling initializeSteamAPI() early.');
     await initializeSteamAPI(); // Ensure SteamAPI is initialized early
+
+    // After early initializations, call main() to start the server
+    if (process.env.NODE_ENV !== 'test') {
+      main();
+    }
   } catch (error) {
     logger.error('Critical error during early initialization sequence:', error);
     console.error('[DEBUG] server.js: Critical error during early initialization sequence:', error);
@@ -187,7 +192,8 @@ console.log('[DEBUG] server.js: Core routes defined.');
 
 
 async function main() {
-  console.log('[DEBUG] server.js: main() called.');
+  console.log('[DEBUG] server.js: main() called. Entered main function.');
+  logger.info('[DEBUG] server.js: Entered main function.');
   try {
     // connectDB() and initializeSteamAPI() are now called earlier, outside of main.
 
@@ -195,9 +201,15 @@ async function main() {
     // Passport-steam now handles Steam OpenID.
 
     if (process.env.NODE_ENV !== 'test') {
+      console.log(`[DEBUG] server.js: About to call app.listen on port ${port}.`);
+      logger.info(`[DEBUG] server.js: About to call app.listen on port ${port}.`);
       app.listen(port, () => {
         logger.info(`Server listening at http://localhost:${port}`);
+        console.log(`[DEBUG] server.js: Server is listening on port ${port}. Callback executed.`);
       });
+    } else {
+      console.log('[DEBUG] server.js: Skipping app.listen because NODE_ENV is "test".');
+      logger.info('[DEBUG] server.js: Skipping app.listen because NODE_ENV is "test".');
     }
   } catch (error) {
     logger.error('Critical error during server startup sequence:', error);
@@ -206,8 +218,6 @@ async function main() {
   }
 }
 
-if (process.env.NODE_ENV !== 'test') {
-  main();
-}
+// The call to main() has been moved into the IIFE for early initializations.
 
 module.exports = app; // Export the configured app for testing
