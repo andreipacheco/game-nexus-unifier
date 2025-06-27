@@ -203,7 +203,7 @@ export const PlatformConnections = () => {
 
 
   const handleSteamAuthRedirect = () => {
-    window.location.href = 'http://localhost:3000/auth/steam';
+    window.location.href = '/auth/steam'; // Use relative path for proxy
   };
 
   const handleSteamDisconnect = async () => {
