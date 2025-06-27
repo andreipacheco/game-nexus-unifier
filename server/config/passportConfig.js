@@ -25,11 +25,11 @@ if (IS_PRODUCTION) {
     determinedAppBaseUrl = process.env.URL || process.env.APP_BASE_URL;
 } else {
     // For development, ensure this matches your backend's listening URL if different from frontend
-    determinedAppBaseUrl = process.env.APP_BASE_URL || 'http://localhost:3000';
+    determinedAppBaseUrl = process.env.APP_BASE_URL || 'http://localhost:10000';
 }
 
 // If for some reason determinedAppBaseUrl is still not set, provide a final fallback.
-const effectiveAppBaseUrl = determinedAppBaseUrl || 'http://localhost:3000';
+const effectiveAppBaseUrl = determinedAppBaseUrl || 'http://localhost:10000';
 
 // Log the determined URL for debugging during startup (check Netlify function logs)
 // Ensure logger is available here or use console.log if logger is initialized later.
