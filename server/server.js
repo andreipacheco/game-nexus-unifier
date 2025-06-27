@@ -9,6 +9,25 @@ const logger = require('./config/logger');
 dotenv.config();
 console.log('[DEBUG] server.js: dotenv.config() called.');
 
+// Initialize DB and SteamAPI early
+(async () => {
+  try {
+    console.log('[DEBUG] server.js: Calling connectDB() early.');
+    await connectDB(); // Ensure DB is connected early
+    console.log('[DEBUG] server.js: Calling initializeSteamAPI() early.');
+    await initializeSteamAPI(); // Ensure SteamAPI is initialized early
+
+    // After early initializations, call main() to start the server
+    if (process.env.NODE_ENV !== 'test') {
+      main();
+    }
+  } catch (error) {
+    logger.error('Critical error during early initialization sequence:', error);
+    console.error('[DEBUG] server.js: Critical error during early initialization sequence:', error);
+    process.exit(1); // Exit if critical initializations fail
+  }
+})();
+
 let steam; // Will hold the SteamAPI instance for /api/steam/* routes
 
 async function initializeSteamAPI() {
@@ -173,21 +192,24 @@ console.log('[DEBUG] server.js: Core routes defined.');
 
 
 async function main() {
-  console.log('[DEBUG] server.js: main() called.');
+  console.log('[DEBUG] server.js: main() called. Entered main function.');
+  logger.info('[DEBUG] server.js: Entered main function.');
   try {
-    console.log('[DEBUG] server.js: Calling connectDB().');
-    await connectDB(); // Ensure DB is connected
-
-    console.log('[DEBUG] server.js: Calling initializeSteamAPI().');
-    await initializeSteamAPI(); // Ensure SteamAPI (for /api/steam/*) is initialized
+    // connectDB() and initializeSteamAPI() are now called earlier, outside of main.
 
     // The OpenID client setup (using openid-client directly) has been removed.
     // Passport-steam now handles Steam OpenID.
 
     if (process.env.NODE_ENV !== 'test') {
+      console.log(`[DEBUG] server.js: About to call app.listen on port ${port}.`);
+      logger.info(`[DEBUG] server.js: About to call app.listen on port ${port}.`);
       app.listen(port, () => {
         logger.info(`Server listening at http://localhost:${port}`);
+        console.log(`[DEBUG] server.js: Server is listening on port ${port}. Callback executed.`);
       });
+    } else {
+      console.log('[DEBUG] server.js: Skipping app.listen because NODE_ENV is "test".');
+      logger.info('[DEBUG] server.js: Skipping app.listen because NODE_ENV is "test".');
     }
   } catch (error) {
     logger.error('Critical error during server startup sequence:', error);
@@ -196,8 +218,6 @@ async function main() {
   }
 }
 
-if (process.env.NODE_ENV !== 'test') {
-  main();
-}
+// The call to main() has been moved into the IIFE for early initializations.
 
 module.exports = app; // Export the configured app for testing
