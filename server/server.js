@@ -3,6 +3,7 @@ const dotenv = require('dotenv');
 const session = require('express-session');
 const passport = require('passport');
 const cors = require('cors'); // Import CORS
+const path = require('path'); // Added for serving static files
 const connectDB = require('./config/db');
 const logger = require('./config/logger');
 
@@ -57,12 +58,36 @@ app.use(express.json());
 console.log('[DEBUG] server.js: express.json middleware applied.');
 
 // CORS configuration
-const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:8080';
+const defaultFrontendUrl = 'http://localhost:8080'; // Default for local development
+const appBaseUrl = process.env.APP_BASE_URL; // Expected to be set in production (e.g., your Render URL)
+
+// Define allowed origins for CORS
+const allowedOrigins = [defaultFrontendUrl, 'http://localhost:3000']; // Add any other local dev origins
+if (process.env.NODE_ENV === 'production' && appBaseUrl) {
+  allowedOrigins.push(appBaseUrl);
+}
+// Render also provides RENDER_EXTERNAL_URL, which could be used if APP_BASE_URL isn't set for some reason.
+// if (process.env.RENDER_EXTERNAL_URL) {
+//   allowedOrigins.push(process.env.RENDER_EXTERNAL_URL);
+// }
+
+
 app.use(cors({
-  origin: frontendUrl,
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    // If the origin is in our list of allowed origins, allow it.
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      return callback(null, true);
+    }
+    // Otherwise, deny the request.
+    const msg = `CORS policy does not allow access from the specified Origin: ${origin}. Allowed origins: ${allowedOrigins.join(', ')}`;
+    logger.warn(msg); // Log denied origins
+    return callback(new Error(msg), false);
+  },
   credentials: true
 }));
-console.log(`[DEBUG] server.js: CORS enabled for origin: ${frontendUrl}`);
+console.log(`[DEBUG] server.js: CORS configured. Allowed origins potentially include: ${allowedOrigins.join(', ')} based on environment.`);
 
 // Request Logging Middleware (add this before session or just after)
 app.use((req, res, next) => {
@@ -119,7 +144,7 @@ console.log('[DEBUG] server.js: Passport middleware initialized.');
 const configurePassport = require('./config/passportConfig'); // Added
 configurePassport(passport); // Added
 
-// Define Routes
+// API routes
 const authRoutes = require('./routes/auth');
 app.use('/auth', authRoutes);
 console.log('[DEBUG] server.js: Auth routes mounted.');
@@ -130,13 +155,6 @@ console.log('[DEBUG] server.js: User routes mounted.');
 
 // Import steam routes
 const steamRoutes = require('./routes/steam');
-
-const port = process.env.PORT || 3000;
-
-app.get('/', (req, res) => {
-  res.send('Hello World!');
-});
-
 // Steam API proxy routes (dependent on `steam` instance)
 app.get('/api/steam/user/:steamid', async (req, res) => {
   if (!steam) {
@@ -188,8 +206,31 @@ app.use('/api/psn', psnRoutes);
 logger.info('PSN routes mounted under /api/psn.');
 console.log('[DEBUG] server.js: PSN routes mounted.');
 
-console.log('[DEBUG] server.js: Core routes defined.');
+console.log('[DEBUG] server.js: Core API routes defined.');
 
+// Serve static files from the React app build directory
+app.use(express.static(path.join(__dirname, '..', 'dist')));
+console.log('[DEBUG] server.js: Static file middleware configured to serve from ../dist.');
+
+// The "catchall" handler: for any request that doesn't match one above,
+// send back React's index.html file.
+app.get('*', (req, res) => {
+  if (!req.path.startsWith('/api') && !req.path.startsWith('/auth')) {
+    res.sendFile(path.join(__dirname, '..', 'dist', 'index.html'));
+    console.log(`[DEBUG] server.js: Served index.html for non-API/auth route: ${req.path}`);
+  } else {
+    // If it's an API/auth path that wasn't caught by a specific route,
+    // it means it's a 404 for an API endpoint.
+    // Let Express handle this (it will typically 404 by default if no other middleware sends response)
+    // or add specific 404 handling for API routes if desired.
+    console.log(`[DEBUG] server.js: API/auth route ${req.path} not found, passing to next handler.`);
+    // next(); // Optional: if you have a specific API 404 handler later
+  }
+});
+console.log('[DEBUG] server.js: Catch-all route configured.');
+
+
+const determinedPort = process.env.PORT || 10000; // Use 10000 as default for Render
 
 async function main() {
   console.log('[DEBUG] server.js: main() called. Entered main function.');
@@ -201,11 +242,11 @@ async function main() {
     // Passport-steam now handles Steam OpenID.
 
     if (process.env.NODE_ENV !== 'test') {
-      console.log(`[DEBUG] server.js: About to call app.listen on port ${port}.`);
-      logger.info(`[DEBUG] server.js: About to call app.listen on port ${port}.`);
-      app.listen(port, () => {
-        logger.info(`Server listening at http://localhost:${port}`);
-        console.log(`[DEBUG] server.js: Server is listening on port ${port}. Callback executed.`);
+      console.log(`[DEBUG] server.js: About to call app.listen on port ${determinedPort}.`);
+      logger.info(`[DEBUG] server.js: About to call app.listen on port ${determinedPort}.`);
+      app.listen(determinedPort, () => {
+        logger.info(`Server listening at http://localhost:${determinedPort}`);
+        console.log(`[DEBUG] server.js: Server is listening on port ${determinedPort}. Callback executed.`);
       });
     } else {
       console.log('[DEBUG] server.js: Skipping app.listen because NODE_ENV is "test".');

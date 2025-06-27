@@ -8,6 +8,7 @@
     "start:server": "cd server && npm start",
     "dev:all": "concurrently \"npm run dev\" \"npm run start:server\"",
     "build": "vite build",
+    "build:frontend": "vite build",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "preview": "vite preview",
