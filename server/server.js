@@ -9,6 +9,20 @@ const logger = require('./config/logger');
 dotenv.config();
 console.log('[DEBUG] server.js: dotenv.config() called.');
 
+// Initialize DB and SteamAPI early
+(async () => {
+  try {
+    console.log('[DEBUG] server.js: Calling connectDB() early.');
+    await connectDB(); // Ensure DB is connected early
+    console.log('[DEBUG] server.js: Calling initializeSteamAPI() early.');
+    await initializeSteamAPI(); // Ensure SteamAPI is initialized early
+  } catch (error) {
+    logger.error('Critical error during early initialization sequence:', error);
+    console.error('[DEBUG] server.js: Critical error during early initialization sequence:', error);
+    process.exit(1); // Exit if critical initializations fail
+  }
+})();
+
 let steam; // Will hold the SteamAPI instance for /api/steam/* routes
 
 async function initializeSteamAPI() {
@@ -175,11 +189,7 @@ console.log('[DEBUG] server.js: Core routes defined.');
 async function main() {
   console.log('[DEBUG] server.js: main() called.');
   try {
-    console.log('[DEBUG] server.js: Calling connectDB().');
-    await connectDB(); // Ensure DB is connected
-
-    console.log('[DEBUG] server.js: Calling initializeSteamAPI().');
-    await initializeSteamAPI(); // Ensure SteamAPI (for /api/steam/*) is initialized
+    // connectDB() and initializeSteamAPI() are now called earlier, outside of main.
 
     // The OpenID client setup (using openid-client directly) has been removed.
     // Passport-steam now handles Steam OpenID.
