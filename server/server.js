@@ -60,36 +60,48 @@ app.use(express.json());
 console.log('[DEBUG] server.js: express.json middleware applied.');
 
 // CORS configuration
-const defaultFrontendUrl = 'http://localhost:8080'; // Default for local development
-const appBaseUrl = process.env.APP_BASE_URL; // Expected to be set in production (e.g., your Render URL)
+const defaultFrontendDevUrl = 'http://localhost:8080'; // For 'npm run dev'
+const vitePreviewUrl = 'http://localhost:4173';      // For 'npm run preview'
+const anotherLocalDevUrl = 'http://localhost:3000';   // Another you had
 
-// Define allowed origins for CORS
-const allowedOrigins = [defaultFrontendUrl, 'http://localhost:3000']; // Add any other local dev origins
-if (process.env.NODE_ENV === 'production' && appBaseUrl) {
-  allowedOrigins.push(appBaseUrl);
+// Production URL from environment variables
+const productionAppUrl = process.env.APP_BASE_URL;
+
+const allowedOrigins = [];
+
+if (process.env.NODE_ENV === 'production') {
+  if (productionAppUrl) {
+    allowedOrigins.push(productionAppUrl);
+    logger.info(`CORS: Production mode. Allowing origin: ${productionAppUrl}`);
+  } else {
+    logger.warn('CORS: Production mode, but APP_BASE_URL is not set. Frontend may not connect.');
+  }
+} else {
+  // Development or other environments
+  allowedOrigins.push(defaultFrontendDevUrl);
+  allowedOrigins.push(vitePreviewUrl);
+  allowedOrigins.push(anotherLocalDevUrl);
+  if (productionAppUrl) { // If APP_BASE_URL is set in dev (e.g., for testing prod config)
+    allowedOrigins.push(productionAppUrl);
+  }
+  logger.info(`CORS: Development/other mode. Allowed origins: ${allowedOrigins.join(', ')}`);
 }
-// Render also provides RENDER_EXTERNAL_URL, which could be used if APP_BASE_URL isn't set for some reason.
-// if (process.env.RENDER_EXTERNAL_URL) {
-//   allowedOrigins.push(process.env.RENDER_EXTERNAL_URL);
-// }
-
 
 app.use(cors({
   origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
-    // If the origin is in our list of allowed origins, allow it.
-    if (allowedOrigins.indexOf(origin) !== -1) {
-      return callback(null, true);
+    // Allow requests with no 'origin' (e.g., Postman, mobile apps, curl)
+    // OR if the origin is in the allowed list.
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      const errorMsg = `CORS: Policy does not allow access from Origin '${origin}'. Allowed: ${allowedOrigins.join(', ')}`;
+      logger.warn(errorMsg);
+      callback(new Error(errorMsg)); // Pass an error to the callback
     }
-    // Otherwise, deny the request.
-    const msg = `CORS policy does not allow access from the specified Origin: ${origin}. Allowed origins: ${allowedOrigins.join(', ')}`;
-    logger.warn(msg); // Log denied origins
-    return callback(new Error(msg), false);
   },
   credentials: true
 }));
-console.log(`[DEBUG] server.js: CORS configured. Allowed origins potentially include: ${allowedOrigins.join(', ')} based on environment.`);
+console.log(`[DEBUG] server.js: CORS configured. Effective allowed origins for current environment: ${allowedOrigins.join(', ')}`);
 
 // Request Logging Middleware (add this before session or just after)
 app.use((req, res, next) => {
