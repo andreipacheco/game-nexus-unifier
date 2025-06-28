@@ -222,38 +222,43 @@ console.log('[DEBUG] server.js: PSN routes mounted.');
 
 console.log('[DEBUG] server.js: Core API routes defined.');
 
-// Serve static files from the React app build directory
+// --- Static file serving and SPA fallback ---
+// Serve static files from the React app build directory (e.g., CSS, JS, images)
+// This should come AFTER API routes if API routes might have conflicting paths (e.g. /api/static/...),
+// but typically API routes are namespaced like /api/, so placing static serving before SPA fallback is common.
 app.use(express.static(path.join(__dirname, '..', 'dist')));
-console.log('[DEBUG] server.js: Static file middleware configured to serve from ../dist.');
+logger.info(`Configured to serve static files from ${path.join(__dirname, '..', 'dist')}`);
+console.log(`[DEBUG] server.js: Static file middleware configured to serve from ../dist.`);
 
-// The "catchall" handler: for any request that doesn't match one above,
-// send back React's index.html file.
-app.get('*', (req, res, next) => { // Added next parameter
-  if (!req.path.startsWith('/api') && !req.path.startsWith('/auth')) {
-    const indexPath = path.join(__dirname, '..', 'dist', 'index.html');
-    res.sendFile(indexPath, (err) => {
-      if (err) {
-        logger.error(`Error sending index.html for path ${req.path}:`, err);
-        console.error(`[DEBUG] server.js: Error sending index.html for path ${req.path}:`, err);
-        // If sending file fails, pass the error to the next error handler
-        // This is important for proper error logging and response.
-        // Ensure you have an error handling middleware defined after this.
-        // For now, we'll let Express's default error handler try to manage it.
-        next(err);
-      } else {
-        logger.info(`Successfully served index.html for non-API/auth route: ${req.path}`);
-        console.log(`[DEBUG] server.js: Successfully served index.html for non-API/auth route: ${req.path}`);
-      }
-    });
-  } else {
-    // If it's an API/auth path that wasn't caught by a specific route,
-    // it means it's a 404 for an API endpoint. Pass to the next handler.
-    logger.info(`API/auth route ${req.path} not found by specific route handlers, passing to next general handler.`);
-    console.log(`[DEBUG] server.js: API/auth route ${req.path} not found, passing to next handler.`);
-    next(); // Explicitly pass to the next middleware/handler (e.g., Express's 404 handler)
+// The SPA fallback handler: for any request that doesn't match an API route or a static file,
+// send back React's index.html file. This must be after API routes and static file serving.
+app.get('*', (req, res) => {
+  // Check if the request is likely for an API endpoint that was not found
+  if (req.path.startsWith('/api/') || req.path.startsWith('/auth/')) {
+    // If it's an API/auth path not caught by specific route handlers, it's a 404 for an API endpoint.
+    logger.warn(`404 - API/auth route not found: ${req.method} ${req.path}`);
+    console.log(`[DEBUG] server.js: 404 - API/auth route ${req.path} not found by specific route handlers.`);
+    return res.status(404).json({ message: 'API endpoint not found' });
   }
+
+  // For all other GET requests, assume it's a frontend route and serve index.html
+  // This allows React Router to handle the client-side routing.
+  const indexPath = path.join(__dirname, '..', 'dist', 'index.html');
+  res.sendFile(indexPath, (err) => {
+    if (err) {
+      logger.error(`Error sending index.html for path ${req.path}:`, err);
+      console.error(`[DEBUG] server.js: Error sending index.html for path ${req.path}:`, err);
+      // Avoid sending another response if headers might have been partially sent.
+      if (!res.headersSent) {
+        res.status(500).send('Error serving frontend application.');
+      }
+    } else {
+      logger.info(`SPA Fallback: Successfully served index.html for non-API/auth route: ${req.path}`);
+      console.log(`[DEBUG] server.js: SPA Fallback: Successfully served index.html for non-API/auth route: ${req.path}`);
+    }
+  });
 });
-console.log('[DEBUG] server.js: Catch-all route configured with enhanced logging and error handling.');
+console.log('[DEBUG] server.js: SPA fallback route configured to serve index.html for client-side routing.');
 
 // const determinedPort = process.env.PORT || 10000; // MOVED EARLIER: Use 10000 as default for Render
 
