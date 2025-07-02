@@ -10,11 +10,11 @@ export default defineConfig(({ mode }) => ({
     port: 3000,
     proxy: {
       '/api': {
-        target: 'http://localhost:10000', // Backend server
+        target: 'http://backend:10000', // Backend server
         changeOrigin: true,
       },
       '/auth': {
-        target: 'http://localhost:10000', // Backend server
+        target: 'http://backend:10000', // Backend server
         changeOrigin: true,
       }
     }

@@ -16,7 +16,7 @@ services:
       context: .
       dockerfile: Dockerfile.backend
     ports:
-      - "3001:3001"
+      - "3001:10000"
     volumes:
       - ./server:/app/server
       - backend_node_modules:/app/server/node_modules
