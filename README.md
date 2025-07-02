@@ -71,6 +71,16 @@ npm i
 npm run dev
 ```
 
+### Executando com Docker
+
+Com o Docker e Docker Compose instalados, você pode construir e executar os contêineres com o seguinte comando:
+
+```sh
+docker-compose up --build
+```
+
+Isso iniciará o frontend em `http://localhost:3000` e o backend em `http://localhost:3001`.
+
 ### Configuração do Backend
 
 Crie um arquivo `.env` em `server/` com:
