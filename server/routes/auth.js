@@ -59,7 +59,13 @@ router.post('/register', async (req, res, next) => {
 
 // POST /auth/login - User Login
 router.post('/login', (req, res, next) => {
+  logger.info('--- Attempting POST /auth/login ---'); // Log de entrada na rota
+  logger.info('Request Body for login:', req.body); // Log para ver o corpo da requisição
+
   passport.authenticate('local', (err, user, info) => {
+    logger.info('--- Passport Authenticate Callback Invoked ---'); // Log para ver se o callback é chamado
+    logger.info('Passport authenticate values:', { err, user: user ? user.email : null, info });
+
     if (err) {
       logger.error('Error during local authentication:', { error: err });
       return next(err);
@@ -68,12 +74,13 @@ router.post('/login', (req, res, next) => {
       logger.warn('Local authentication failed:', { message: info ? info.message : 'No user object' });
       return res.status(401).json({ message: info && info.message ? info.message : 'Login failed. Invalid credentials.' });
     }
-    req.login(user, (err) => {
-      if (err) {
-        logger.error('Error logging in user after local authentication:', { userId: user._id, error: err });
-        return next(err);
+    req.login(user, (loginErr) => { // Changed err to loginErr to avoid conflict if err from authenticate is in scope
+      logger.info('--- req.login Callback Invoked ---'); // Log para ver se o req.login callback é chamado
+      if (loginErr) {
+        logger.error('Error logging in user after local authentication (req.login callback):', { userId: user._id, error: loginErr });
+        return next(loginErr);
       }
-      logger.info(`User ${user.email} logged in successfully via local strategy.`);
+      logger.info(`User ${user.email} logged in successfully via local strategy (req.login success).`);
       const { password, ...userData } = user.toObject(); // Exclude password
       return res.json({ message: 'Login successful', user: userData });
     });
