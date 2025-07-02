@@ -1,11 +1,18 @@
-const logger = require('../config/logger'); // Certifique-se que o logger está disponível
-logger.info('--- [server/routes/auth.js] File loaded and executed ---');
-
+// server/routes/auth.js (VERSÃO DE TESTE SIMPLIFICADA)
 const express = require('express');
 const router = express.Router();
+const logger = require('../config/logger'); // Supondo que isso funcione
+
+logger.info('--- [server/routes/auth.js] SIMPLIFIED TEST VERSION LOADED ---');
+
+router.get('/test-auth', (req, res) => {
+  logger.info('--- GET /auth/test-auth endpoint hit! ---');
+  res.status(200).send('Auth test route is working!');
+});
+
+/*
 const passport = require('passport');
 const User = require('../models/User'); // Import User model
-const logger = require('../config/logger');
 
 // Note: The initializeAuthSteamAPI and related 'steam' variable are removed
 // as passport-steam strategy in passportConfig.js handles Steam API interaction.
@@ -14,6 +21,9 @@ const logger = require('../config/logger');
 
 // POST /auth/register - User Registration
 router.post('/register', async (req, res, next) => {
+  logger.info('--- Attempting POST /auth/register ---');
+  logger.info('Request Body for register:', req.body);
+
   const { name, email, password } = req.body;
 
   if (!email || !password) {
@@ -41,6 +51,7 @@ router.post('/register', async (req, res, next) => {
 
     // Log in the user automatically after registration
     req.login(newUser, (err) => {
+      logger.info('--- req.login Callback Invoked (after register) ---');
       if (err) {
         logger.error('Error logging in user after registration:', { userId: newUser._id, error: err });
         return next(err); // Pass error to error handler
@@ -74,7 +85,7 @@ router.post('/login', (req, res, next) => {
       return next(err);
     }
     if (!user) {
-      logger.warn('Local authentication failed:', { message: info ? info.message : 'No user object' });
+      logger.warn('Local authentication failed (passport.authenticate callback):', { message: info ? info.message : 'No user object' });
       return res.status(401).json({ message: info && info.message ? info.message : 'Login failed. Invalid credentials.' });
     }
     req.login(user, (loginErr) => { // Changed err to loginErr to avoid conflict if err from authenticate is in scope
@@ -402,5 +413,5 @@ router.post('/xbox/connect', async (req, res) => {
         res.status(500).json({ message: 'Server error during Xbox account connection.' });
     }
 });
-
+*/
 module.exports = router;
