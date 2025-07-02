@@ -1,3 +1,6 @@
+const logger = require('../config/logger'); // Certifique-se que o logger está disponível
+logger.info('--- [server/routes/auth.js] File loaded and executed ---');
+
 const express = require('express');
 const router = express.Router();
 const passport = require('passport');
