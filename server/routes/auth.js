@@ -10,7 +10,6 @@ router.get('/test-auth', (req, res) => {
   res.status(200).send('Auth test route is working!');
 });
 
-/*
 const passport = require('passport');
 const User = require('../models/User'); // Import User model
 
@@ -413,5 +412,5 @@ router.post('/xbox/connect', async (req, res) => {
         res.status(500).json({ message: 'Server error during Xbox account connection.' });
     }
 });
-*/
+
 module.exports = router;
