@@ -12,10 +12,12 @@ export default defineConfig(({ mode }) => ({
       '/api': {
         target: 'http://backend:10000', // Backend server
         changeOrigin: true,
+        cookieDomainRewrite: "localhost",
       },
       '/auth': {
         target: 'http://backend:10000', // Backend server
         changeOrigin: true,
+        cookieDomainRewrite: "localhost",
       }
     }
   },
