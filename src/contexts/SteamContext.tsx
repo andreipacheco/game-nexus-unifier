@@ -51,8 +51,9 @@ export const SteamProvider: React.FC<SteamProviderProps> = ({ children }) => {
   const checkUserSession = useCallback(async () => {
     setIsLoadingSteamProfile(true);
     setSteamProfileError(null);
+    const API_URL = import.meta.env.VITE_API_BASE_URL;
     try {
-      const response = await fetch('/api/user/me'); // Corrected endpoint
+      const response = await fetch(`${API_URL}/api/user/me`); // Corrected endpoint
       if (response.ok) {
         const data: SteamUserProfile & { steamId: string } = await response.json();
         setSteamId(data.steamId);
@@ -87,8 +88,9 @@ export const SteamProvider: React.FC<SteamProviderProps> = ({ children }) => {
     if (!sId) return;
     setIsLoadingSteamProfile(true);
     setSteamProfileError(null);
+    const API_URL = import.meta.env.VITE_API_BASE_URL;
     try {
-      const response = await fetch(`/api/steam/user/${sId}`); // Assuming backend is on same domain
+      const response = await fetch(`${API_URL}/api/steam/user/${sId}`); // Assuming backend is on same domain
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || `Error: ${response.status}`);

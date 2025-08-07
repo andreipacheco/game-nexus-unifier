@@ -6,6 +6,7 @@ const logger = require('../config/logger'); // Supondo que isso funcione
 logger.info('--- [server/routes/auth.js] SIMPLIFIED TEST VERSION LOADED ---');
 
 router.get('/test-auth', (req, res) => {
+  console.log('>>> [DEBUG] Entrou no handler /auth/test-auth');
   logger.info('--- GET /auth/test-auth endpoint hit! ---');
   res.status(200).send('Auth test route is working!');
 });
@@ -71,12 +72,13 @@ router.post('/register', async (req, res, next) => {
 });
 
 // POST /auth/login - User Login
+// POST /auth/login - User Login
 router.post('/login', (req, res, next) => {
-  logger.info('--- Attempting POST /auth/login ---'); // Log de entrada na rota
-  logger.info('Request Body for login:', req.body); // Log para ver o corpo da requisição
+  logger.info('--- Attempting POST /auth/login ---');
+  logger.info('Request Body for login:', req.body);
 
   passport.authenticate('local', (err, user, info) => {
-    logger.info('--- Passport Authenticate Callback Invoked ---'); // Log para ver se o callback é chamado
+    logger.info('--- Passport Authenticate Callback Invoked ---');
     logger.info('Passport authenticate values:', { err, user: user ? user.email : null, info });
 
     if (err) {
@@ -85,16 +87,19 @@ router.post('/login', (req, res, next) => {
     }
     if (!user) {
       logger.warn('Local authentication failed (passport.authenticate callback):', { message: info ? info.message : 'No user object' });
+      // Adicione log extra aqui
+      logger.warn('Login failed: Usuário não encontrado ou senha incorreta.');
       return res.status(401).json({ message: info && info.message ? info.message : 'Login failed. Invalid credentials.' });
     }
-    req.login(user, (loginErr) => { // Changed err to loginErr to avoid conflict if err from authenticate is in scope
-      logger.info('--- req.login Callback Invoked ---'); // Log para ver se o req.login callback é chamado
+    req.login(user, (loginErr) => {
+      logger.info('--- req.login Callback Invoked ---');
       if (loginErr) {
         logger.error('Error logging in user after local authentication (req.login callback):', { userId: user._id, error: loginErr });
         return next(loginErr);
       }
       logger.info(`User ${user.email} logged in successfully via local strategy (req.login success).`);
-      const { password, ...userData } = user.toObject(); // Exclude password
+      logger.info('Session after login:', req.session);
+      const { password, ...userData } = user.toObject();
       return res.json({ message: 'Login successful', user: userData });
     });
   })(req, res, next);

@@ -1,20 +1,20 @@
 # Use an official Node.js runtime as a parent image
 FROM node:18-alpine
 
-# Set the working directory in the container
-WORKDIR /app/server
+# Set the working directory in the container to a general /app
+WORKDIR /app
 
 # Copy package.json and package-lock.json (or yarn.lock) from the server directory
 COPY server/package*.json ./
 
 # Install project dependencies for the backend
-RUN npm install
+RUN npm install --omit=dev
 
-# Copy the rest of the backend application code
+# Copy the rest of the backend application code from the server directory
 COPY server/ .
 
-# Make port 3001 available to the world outside this container
-EXPOSE 3001
+# Make port 10000 available to the world outside this container
+EXPOSE 10000
 
 # Run the app when the container launches
-CMD ["npm", "start"]
+CMD ["node", "server.js"]

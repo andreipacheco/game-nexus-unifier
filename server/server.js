@@ -7,6 +7,9 @@ const path = require('path'); // Added for serving static files
 const connectDB = require('./config/db');
 const logger = require('./config/logger');
 
+console.log('[DEBUG] __dirname:', __dirname);
+console.log('[DEBUG] process.cwd():', process.cwd());
+
 dotenv.config();
 console.log('[DEBUG] server.js: dotenv.config() called.');
 
@@ -60,14 +63,18 @@ app.use(express.json());
 console.log('[DEBUG] server.js: express.json middleware applied.');
 
 // CORS configuration
-const defaultFrontendUrl = 'http://localhost:8080'; // Default for local development
-const appBaseUrl = process.env.APP_BASE_URL; // Expected to be set in production (e.g., your Render URL)
+const defaultFrontendUrl = 'http://localhost:3000'; // Vite/React padrão
+const allowedOrigins = [
+  defaultFrontendUrl,
+  'http://localhost:5173',    // Vite (outra porta comum)
+  'http://localhost:10000'    // Backend Express
+];
 
-// Define allowed origins for CORS
-const allowedOrigins = [defaultFrontendUrl, 'http://localhost:3000']; // Add any other local dev origins
+const appBaseUrl = process.env.APP_BASE_URL;
 if (process.env.NODE_ENV === 'production' && appBaseUrl) {
   allowedOrigins.push(appBaseUrl);
 }
+
 // Render also provides RENDER_EXTERNAL_URL, which could be used if APP_BASE_URL isn't set for some reason.
 // if (process.env.RENDER_EXTERNAL_URL) {
 //   allowedOrigins.push(process.env.RENDER_EXTERNAL_URL);
@@ -149,7 +156,7 @@ configurePassport(passport); // Added
 // API routes
 const authRoutes = require('./routes/auth');
 app.use('/auth', authRoutes);
-console.log('[DEBUG] server.js: Auth routes mounted.');
+console.log('***** [AUTH] server.js: Auth routes mounted. ***** ');
 
 const userRoutes = require('./routes/user');
 app.use('/api/user', userRoutes);
@@ -245,7 +252,7 @@ async function main() {
     if (process.env.NODE_ENV !== 'test') {
       console.log(`[DEBUG] server.js: About to call app.listen on port ${determinedPort}.`);
       logger.info(`[DEBUG] server.js: About to call app.listen on port ${determinedPort}.`);
-      app.listen(determinedPort, () => {
+      app.listen(determinedPort, '0.0.0.0', () => {
         logger.info(`Server listening at http://localhost:${determinedPort}`);
         console.log(`[DEBUG] server.js: Server is listening on port ${determinedPort}. Callback executed.`);
       });

@@ -29,9 +29,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const fetchUser = async () => {
     setIsLoading(true);
     console.log('AuthContext: Attempting to fetch user. Options: { credentials: "include" }');
+    const API_URL = import.meta.env.VITE_API_BASE_URL;
     try {
       // Use relative path for fetching user data
-      const response = await fetch('/api/user/me', {
+      const response = await fetch(`${API_URL}/api/user/me`, {
         credentials: 'include', // Crucial for sending session cookies
       });
       console.log('AuthContext: /api/user/me response status:', response.status);
@@ -54,9 +55,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const logout = async () => {
     setIsLoading(true);
     console.log('AuthContext: Attempting to logout. Options: { credentials: "include" }');
+    const API_URL = import.meta.env.VITE_API_BASE_URL;
     try {
         // Use relative path for logout API call
-        const response = await fetch('/auth/logout', {
+        const response = await fetch(`${API_URL}/auth/logout`, {
             credentials: 'include', // Crucial for sending session cookies
         });
         console.log('AuthContext: /auth/logout response status:', response.status);

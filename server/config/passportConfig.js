@@ -225,6 +225,7 @@ function configurePassport(passportInstance) {
         usernameField: 'email', // Use email as the username field
         // passReqToCallback: false // Default is false, set true if you need req object in verify callback
     }, async (email, password, done) => {
+        logger.info('Passport LocalStrategy called with:', { email });
         try {
             const lowercasedEmail = email.toLowerCase();
             const user = await User.findOne({ email: lowercasedEmail });
@@ -258,11 +259,13 @@ function configurePassport(passportInstance) {
 
 
     passportInstance.serializeUser((user, done) => {
+        logger.info('serializeUser:', user.id || user._id);
         // user object here is what was returned from the strategy's done(null, user)
-        done(null, user.id); // Store MongoDB _id in session
+        done(null, user.id || user._id); // Store MongoDB _id in session
     });
 
     passportInstance.deserializeUser(async (id, done) => {
+        logger.info('deserializeUser:', id);
         // id here is the MongoDB _id stored by serializeUser
         try {
             const user = await User.findById(id);
