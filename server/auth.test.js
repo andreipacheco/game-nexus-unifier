@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const { MongoMemoryServer } = require('mongodb-memory-server');
 const passport = require('passport'); // Actual passport instance from app
 const User = require('./models/User'); // Actual User model
-const app = require('./server'); // Load app AFTER other setups
+const { app } = require('./server'); // Load app AFTER other setups
 const logger = require('./config/logger');
 
 // Mock logger to suppress output during tests

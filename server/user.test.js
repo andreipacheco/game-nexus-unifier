@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const { MongoMemoryServer } = require('mongodb-memory-server');
 const bcrypt = require('bcrypt');
 const User = require('./models/User'); // Actual User model
-const app = require('./server'); // Express app
+const { app } = require('./server'); // Express app
 const logger = require('./config/logger');
 
 jest.mock('./config/logger', () => ({

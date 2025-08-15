@@ -74,6 +74,12 @@ router.get('/user/:xuid/games', async (req, res) => {
 
     if (response.data && response.data.titles) {
       const titles = response.data.titles;
+
+      if (titles.length === 0) {
+        logger.info(`No Xbox games with achievements found for xuid: ${xuid}`);
+        return res.json([]);
+      }
+
       logger.info(`Fetched ${titles.length} titles (games) for xuid: ${xuid}.`);
 
       for (const title of titles) {
@@ -81,61 +87,48 @@ router.get('/user/:xuid/games', async (req, res) => {
         const gameInfo = {
           titleId: title.titleId,
           name: title.name,
-          displayImage: title.displayImage, // Make sure this field exists or find the correct one
+          displayImage: title.displayImage,
           achievements: {
             currentAchievements: title.achievement.currentAchievements,
             totalAchievements: title.achievement.totalAchievements,
             currentGamerscore: title.achievement.currentGamerscore,
             totalGamerscore: title.achievement.totalGamerscore,
           },
-          // platform: title.platform, // If available
-          // lastPlayed: title.lastUnlockDate ?? title.lastPlayed // If available
         };
         gamesWithDetails.push(gameInfo);
-
-        // xbl.io API might have rate limits, though not explicitly detailed in public docs for v2.
-        // Adding a small delay just in case.
         await delay(100);
       }
       logger.info(`Successfully processed ${gamesWithDetails.length} games for xuid: ${xuid}`);
 
       // --- Save to MongoDB ---
-      if (gamesWithDetails.length > 0) {
-        logger.info(`Saving/updating ${gamesWithDetails.length} Xbox games to MongoDB for xuid: ${xuid}`);
-        for (const gameDetail of gamesWithDetails) {
-          const gameDataToSave = {
-            xuid: xuid,
-            titleId: gameDetail.titleId,
-            name: gameDetail.name,
-            displayImage: gameDetail.displayImage,
-            achievements: gameDetail.achievements,
-            // platform: gameDetail.platform,
-            // lastPlayed: gameDetail.lastPlayed,
-            lastUpdated: new Date()
-          };
-
-          try {
-            await XboxGame.findOneAndUpdate(
-              { xuid: xuid, titleId: gameDetail.titleId },
-              gameDataToSave,
-              { upsert: true, new: true, setDefaultsOnInsert: true }
-            );
-          } catch (dbSaveError) {
-            logger.error(`Failed to save Xbox game ${gameDetail.titleId} to MongoDB for xuid ${xuid}:`, {
-              errorMessage: dbSaveError.message,
-              gameData: gameDataToSave
-            });
-          }
+      logger.info(`Saving/updating ${gamesWithDetails.length} Xbox games to MongoDB for xuid: ${xuid}`);
+      for (const gameDetail of gamesWithDetails) {
+        const gameDataToSave = {
+          xuid: xuid,
+          titleId: gameDetail.titleId,
+          name: gameDetail.name,
+          displayImage: gameDetail.displayImage,
+          achievements: gameDetail.achievements,
+          lastUpdated: new Date()
+        };
+        try {
+          await XboxGame.findOneAndUpdate(
+            { xuid: xuid, titleId: gameDetail.titleId },
+            gameDataToSave,
+            { upsert: true, new: true, setDefaultsOnInsert: true }
+          );
+        } catch (dbSaveError) {
+          logger.error(`Failed to save Xbox game ${gameDetail.titleId} to MongoDB for xuid ${xuid}:`, {
+            errorMessage: dbSaveError.message,
+            gameData: gameDataToSave
+          });
         }
-        logger.info(`Finished saving/updating Xbox games to MongoDB for xuid: ${xuid}`);
       }
+      logger.info(`Finished saving/updating Xbox games to MongoDB for xuid: ${xuid}`);
       // --- End Save to MongoDB ---
 
       res.json(gamesWithDetails); // Return the fresh data from API
 
-    } else if (response.data && response.data.titles && response.data.titles.length === 0) {
-      logger.info(`No Xbox games with achievements found for xuid: ${xuid} or profile might be private.`);
-      res.json([]);
     } else {
       logger.warn('xbl.io API response structure was not as expected or empty for achievements/player.', { xuid, responseData: response.data });
       res.status(500).json({ error: 'Unexpected response structure from xbl.io API.' });

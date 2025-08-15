@@ -15,24 +15,26 @@ console.log('[DEBUG] server.js: dotenv.config() called.');
 
 const determinedPort = process.env.PORT || 10000; // Define port before it's used by main() via IIFE
 
-// Initialize DB and SteamAPI early
-(async () => {
-  try {
-    console.log('[DEBUG] server.js: Calling connectDB() early.');
-    await connectDB(); // Ensure DB is connected early
-    console.log('[DEBUG] server.js: Calling initializeSteamAPI() early.');
-    await initializeSteamAPI(); // Ensure SteamAPI is initialized early
+// Initialize DB and SteamAPI early, but not in test environment
+if (process.env.NODE_ENV !== 'test') {
+  (async () => {
+    try {
+      console.log('[DEBUG] server.js: Calling connectDB() early.');
+      await connectDB(); // Ensure DB is connected early
+      console.log('[DEBUG] server.js: Calling initializeSteamAPI() early.');
+      await initializeSteamAPI(); // Ensure SteamAPI is initialized early
 
-    // After early initializations, call main() to start the server
-    if (process.env.NODE_ENV !== 'test') {
-      main();
+      // After early initializations, call main() to start the server
+      if (process.env.NODE_ENV !== 'test') {
+        main();
+      }
+    } catch (error) {
+      logger.error('Critical error during early initialization sequence:', error);
+      console.error('[DEBUG] server.js: Critical error during early initialization sequence:', error);
+      process.exit(1); // Exit if critical initializations fail
     }
-  } catch (error) {
-    logger.error('Critical error during early initialization sequence:', error);
-    console.error('[DEBUG] server.js: Critical error during early initialization sequence:', error);
-    process.exit(1); // Exit if critical initializations fail
-  }
-})();
+  })();
+}
 
 let steam; // Will hold the SteamAPI instance for /api/steam/* routes
 
@@ -223,17 +225,14 @@ console.log('[DEBUG] server.js: Static file middleware configured to serve from 
 
 // The "catchall" handler: for any request that doesn't match one above,
 // send back React's index.html file.
-app.get('*', (req, res) => {
+app.get(/.*/, (req, res, next) => {
   if (!req.path.startsWith('/api') && !req.path.startsWith('/auth')) {
     res.sendFile(path.join(__dirname, '..', 'dist', 'index.html'));
     console.log(`[DEBUG] server.js: Served index.html for non-API/auth route: ${req.path}`);
   } else {
-    // If it's an API/auth path that wasn't caught by a specific route,
-    // it means it's a 404 for an API endpoint.
-    // Let Express handle this (it will typically 404 by default if no other middleware sends response)
-    // or add specific 404 handling for API routes if desired.
-    console.log(`[DEBUG] server.js: API/auth route ${req.path} not found, passing to next handler.`);
-    // next(); // Optional: if you have a specific API 404 handler later
+    // For API routes that are not found, we pass them to the next middleware.
+    // This allows Express's default 404 handler to take over.
+    next();
   }
 });
 console.log('[DEBUG] server.js: Catch-all route configured.');
@@ -269,4 +268,4 @@ async function main() {
 
 // The call to main() has been moved into the IIFE for early initializations.
 
-module.exports = app; // Export the configured app for testing
+module.exports = { app, initializeSteamAPI }; // Export for testability

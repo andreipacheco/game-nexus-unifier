@@ -1,20 +1,19 @@
+// Hoist the mock declarations and the mock itself to the top.
+const mockSteamGameFind = jest.fn();
+const mockSteamGameFindOneAndUpdate = jest.fn();
+
+jest.mock('./models/SteamGame', () => ({
+  find: mockSteamGameFind,
+  findOneAndUpdate: mockSteamGameFindOneAndUpdate,
+}));
+
 const request = require('supertest');
 const axios = require('axios');
-const SteamGame = require('../models/SteamGame'); // Actual path to model
+const SteamGame = require('./models/SteamGame'); // Actual path to model
 const logger = require('./config/logger'); // To potentially spy on logger.error
 
 // Mock axios
 jest.mock('axios');
-
-// Mock Mongoose model SteamGame
-// We mock the static methods find and findOneAndUpdate
-const mockSteamGameFind = jest.fn();
-const mockSteamGameFindOneAndUpdate = jest.fn();
-
-jest.mock('../models/SteamGame', () => ({
-  find: mockSteamGameFind,
-  findOneAndUpdate: mockSteamGameFindOneAndUpdate,
-}));
 
 // Mock logger to spy on error calls if needed, or suppress console output during tests
 jest.mock('./config/logger', () => ({
@@ -41,11 +40,16 @@ jest.mock('steamapi', () => {
 process.env.MONGODB_URI = 'mongodb://localhost:27017/test_db_server_steam'; // Use a distinct name
 jest.mock('./config/db', () => jest.fn()); // Mock connectDB
 
-const app = require('./server'); // Must be required after mocks
+const { app, initializeSteamAPI } = require('./server'); // Must be required after mocks
 
 const STEAM_ID_VALID = '76561197960287930'; // A valid SteamID format
 
 describe('Steam API Endpoints', () => {
+  beforeAll(async () => {
+    // Initialize the SteamAPI instance for the tests
+    await initializeSteamAPI();
+  });
+
   beforeEach(() => {
     // Reset mocks before each test
     axios.get.mockReset();
